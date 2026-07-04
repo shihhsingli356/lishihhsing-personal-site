@@ -2,23 +2,25 @@ export type ProjectStatus = "Planning" | "In Progress" | "Published";
 
 export const projects = [
   {
-    title: "Personal Site System",
-    status: "In Progress" as ProjectStatus,
-    description: "用于展示个人项目、学业进度、公开计划和专业方向的长期个人站。",
-    tech: ["Astro", "TypeScript", "Tailwind CSS"],
-    href: "#"
+    title: "LiShihhsing Personal Site",
+    status: "Published" as ProjectStatus,
+    description:
+      "A personal website for project links, academic progress, public plans, and contact information.",
+    tech: ["Astro", "TypeScript", "Cloudflare Pages"],
+    href: "https://lishihhsing-personal-site.pages.dev/"
   },
   {
-    title: "Aerospace Study Dashboard",
-    status: "Planning" as ProjectStatus,
-    description: "把课程、毕业要求和阶段计划整理成可视化进度面板。",
-    tech: ["Data", "Dashboard", "Education"],
-    href: "#"
+    title: "kaoyan-daily-checkin",
+    status: "In Progress" as ProjectStatus,
+    description:
+      "A daily check-in project for tracking postgraduate entrance exam preparation, study habits, and ongoing progress.",
+    tech: ["GitHub", "Study Plan", "Daily Check-in"],
+    href: "https://github.com/shihhsingli356/kaoyan-daily-checkin"
   },
   {
     title: "Future Project Placeholder",
     status: "Planning" as ProjectStatus,
-    description: "预留给未来的工程、科研、课程或个人实验项目。",
+    description: "Reserved for future engineering, research, coursework, or personal experiment projects.",
     tech: ["Research", "Prototype", "Documentation"],
     href: "#"
   }
