@@ -1,0 +1,139 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { site, type Lang } from "@/data/site";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const copy = site[lang];
+const { about, profile, socials } = copy;
+---
+
+<BaseLayout title={about.title} lang={lang}>
+  <section class="mx-auto max-w-6xl px-5 py-12 md:py-16">
+    <div class="panel grid gap-6 overflow-hidden p-6 md:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
+      <div class="absolute -right-16 -top-20 h-52 w-52 bg-iris/20 blur-3xl"></div>
+      <div class="absolute -bottom-20 left-6 h-48 w-48 bg-mint/20 blur-3xl"></div>
+      <div>
+        <p class="section-label">{about.label}</p>
+        <h1 class="mt-4 max-w-3xl font-display text-5xl font-semibold leading-tight text-main md:text-6xl">
+          {about.headline}
+        </h1>
+        <p class="mt-6 max-w-3xl text-lg leading-8 text-soft md:text-xl">
+          {profile.summary}
+        </p>
+      </div>
+      <figure class="quiet-panel w-full max-w-sm justify-self-center p-3 lg:w-[22rem] lg:justify-self-end">
+        <div class="overflow-hidden rounded-[6px] border border-white/40 bg-white/20">
+          <img
+            src="/profile.jpg"
+            alt={about.portraitAlt}
+            class="h-[22rem] w-full object-cover object-top md:h-[24rem] lg:h-[22rem]"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+        <figcaption class="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-sm text-muted">
+          <span>{about.portraitCaptionLeft}</span>
+          <span>{about.portraitCaptionRight}</span>
+        </figcaption>
+      </figure>
+    </div>
+
+    <div class="mt-5 grid gap-5 md:grid-cols-3">
+      {
+        about.identityCards.map((card) => (
+          <article class="panel p-5">
+            <p class="text-sm text-muted">{card.label}</p>
+            <h2 class="mt-3 font-display text-xl font-semibold text-main">{card.title}</h2>
+            <p class="mt-3 text-sm leading-6 text-soft">{card.body}</p>
+          </article>
+        ))
+      }
+    </div>
+
+    <section class="mt-10">
+      <div class="mb-5">
+        <p class="section-label">{about.focusLabel}</p>
+        <h2 class="mt-2 font-display text-3xl font-semibold text-main">{about.focusTitle}</h2>
+      </div>
+      <div class="grid gap-5 md:grid-cols-2">
+        {
+          about.focusAreas.map((area) => (
+            <article class="panel min-h-[240px] p-6">
+              <h3 class="font-display text-2xl font-semibold text-main">{area.title}</h3>
+              <p class="mt-4 text-sm leading-7 text-soft">{area.body}</p>
+              <div class="mt-5 flex flex-wrap gap-2">
+                {area.tags.map((tag) => (
+                  <span class="glass-button px-3 py-1 text-xs font-semibold">{tag}</span>
+                ))}
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="mt-10 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+      <div class="panel p-6">
+        <p class="section-label">{about.timelineLabel}</p>
+        <h2 class="mt-3 font-display text-3xl font-semibold text-main">{about.timelineTitle}</h2>
+        <p class="mt-4 text-sm leading-7 text-soft">
+          {about.timelineDescription}
+        </p>
+      </div>
+      <div class="grid gap-4">
+        {
+          about.timeline.map((item) => (
+            <article class="quiet-panel grid gap-4 p-5 md:grid-cols-[8rem_1fr]">
+              <p class="font-display text-lg font-semibold text-mint">{item.year}</p>
+              <div>
+                <h3 class="font-display text-xl font-semibold text-main">{item.title}</h3>
+                <p class="mt-2 text-sm leading-6 text-soft">{item.body}</p>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="mt-10">
+      <div class="mb-5">
+        <p class="section-label">{about.toolsLabel}</p>
+        <h2 class="mt-2 font-display text-3xl font-semibold text-main">{about.toolsTitle}</h2>
+      </div>
+      <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        {
+          about.toolGroups.map((group) => (
+            <article class="panel p-5">
+              <h3 class="font-display text-xl font-semibold text-main">{group.title}</h3>
+              <div class="mt-5 flex flex-wrap gap-2">
+                {group.items.map((item) => (
+                  <span class="glass-button px-3 py-1 text-xs font-semibold">{item}</span>
+                ))}
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="panel mt-10 p-6 md:flex md:items-center md:justify-between">
+      <div>
+        <p class="text-sm text-muted">{about.contact}</p>
+        <h2 class="mt-2 font-display text-2xl font-semibold text-main">{about.socialLinks}</h2>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-3 md:mt-0">
+        {
+          socials.map((social) => (
+            <a class="glass-button px-4 py-2 text-sm font-semibold transition hover:border-mint" href={social.href} target={social.href.startsWith("http") ? "_blank" : undefined} rel={social.href.startsWith("http") ? "noreferrer" : undefined}>
+              {social.label}
+            </a>
+          ))
+        }
+      </div>
+    </section>
+  </section>
+</BaseLayout>

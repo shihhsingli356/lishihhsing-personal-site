@@ -1,22 +1,30 @@
 ---
 import Nav from "@/components/Nav.astro";
+import { getLangFromPath, htmlLang, localizePath, site, type Lang } from "@/data/site";
 import "@/styles/global.css";
 
 interface Props {
   title: string;
   description?: string;
+  lang?: Lang;
 }
 
-const { title, description = "LiShihhsing personal site" } = Astro.props;
+const lang = Astro.props.lang ?? getLangFromPath(Astro.url.pathname);
+const { title, description = site[lang].metaDescription } = Astro.props;
+const baseUrl = Astro.site ?? Astro.url.origin;
+const zhUrl = new URL(localizePath(Astro.url.pathname, "zh"), baseUrl).toString();
+const enUrl = new URL(localizePath(Astro.url.pathname, "en"), baseUrl).toString();
 ---
 
 <!doctype html>
-<html lang="zh-CN">
+<html lang={htmlLang[lang]}>
   <head>
     <meta charset="UTF-8" />
     <meta name="description" content={description} />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
+    <link rel="alternate" hreflang="zh-CN" href={zhUrl} />
+    <link rel="alternate" hreflang="en" href={enUrl} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script is:inline>
       const theme = localStorage.getItem("theme");

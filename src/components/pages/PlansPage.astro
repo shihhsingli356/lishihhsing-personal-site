@@ -1,0 +1,62 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { site, type Lang } from "@/data/site";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const copy = site[lang];
+const { plans, plansPage } = copy;
+---
+
+<BaseLayout title={plansPage.title} lang={lang}>
+  <section class="mx-auto max-w-6xl px-5 py-16">
+    <div class="panel p-6 md:p-8">
+      <p class="section-label">{plansPage.label}</p>
+      <h1 class="mt-4 font-display text-5xl font-semibold text-main">{plansPage.heading}</h1>
+      <p class="mt-5 max-w-2xl text-lg leading-8 text-soft">
+        {plansPage.description}
+      </p>
+    </div>
+
+    <div class="mt-5 grid gap-5 lg:grid-cols-4">
+      {
+        plans.map((plan, index) => (
+          <section class="panel relative min-h-[280px] p-5">
+            <div class="mb-5 flex items-center justify-between">
+              <p class="text-sm font-semibold text-coral">{plan.phase}</p>
+              <span class="quiet-panel inline-flex h-8 w-8 items-center justify-center text-xs font-semibold text-muted">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+            </div>
+            <h2 class="font-display text-xl font-semibold text-main">{plan.title}</h2>
+            <ul class="mt-5 space-y-3 text-sm leading-6 text-soft">
+              {plan.items.map((item) => (
+                <li class="grid grid-cols-[auto_1fr] gap-2">
+                  <span class="mt-2 h-1.5 w-1.5 bg-mint"></span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      }
+    </div>
+
+    <section class="panel mt-5 p-6">
+      <p class="section-label">{plansPage.logicLabel}</p>
+      <div class="mt-5 grid gap-4 md:grid-cols-3">
+        {
+          plansPage.logic.map((item) => (
+            <div class="quiet-panel p-4">
+              <h2 class="font-display text-xl font-semibold text-main">{item.title}</h2>
+              <p class="mt-2 text-sm leading-6 text-soft">{item.body}</p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+  </section>
+</BaseLayout>

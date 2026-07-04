@@ -1,27 +1,34 @@
 ---
 import ThemeToggle from "@/components/ThemeToggle.astro";
+import { basePath, getLangFromPath, languageSwitchPath, localizePath, site } from "@/data/site";
 
-const links = [
-  { href: "/", label: "Home" },
-  { href: "/about", label: "About" },
-  { href: "/projects", label: "Projects" },
-  { href: "/education", label: "Education" },
-  { href: "/plans", label: "Plans" }
-];
+const lang = getLangFromPath(Astro.url.pathname);
+const copy = site[lang].nav;
+const currentPath = basePath(Astro.url.pathname);
+const switchHref = languageSwitchPath(Astro.url.pathname, lang);
+
+const linkClass = (path: string) =>
+  [
+    "glass-button px-3 py-2 text-sm font-medium transition hover:border-mint",
+    currentPath === path ? "border-mint" : ""
+  ].join(" ");
 ---
 
 <header class="sticky top-0 z-20 border-b border-ink/10 bg-white/45 backdrop-blur-2xl dark:border-white/10 dark:bg-ink/45">
   <nav class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
-    <a href="/" class="font-display text-sm font-semibold tracking-wide text-main">LiShihhsing</a>
+    <a href={localizePath("/", lang)} class="font-display text-sm font-semibold tracking-wide text-main">{copy.brand}</a>
     <div class="flex items-center justify-end gap-2">
       <div class="hidden flex-wrap items-center justify-end gap-1 md:flex">
         {
-          links.map((link) => (
-            <a class="glass-button px-3 py-2 text-sm font-medium transition hover:border-mint" href={link.href}>
+          copy.links.map((link) => (
+            <a class={linkClass(link.path)} href={localizePath(link.path, lang)} aria-current={currentPath === link.path ? "page" : undefined}>
               {link.label}
             </a>
           ))
         }
+        <a class="glass-button px-3 py-2 text-sm font-semibold transition hover:border-mint" href={switchHref}>
+          {copy.languageLabel}
+        </a>
       </div>
       <button
         class="glass-button inline-flex h-10 items-center px-3 text-xs font-semibold md:hidden"
@@ -30,7 +37,7 @@ const links = [
         aria-controls="mobile-menu"
         aria-expanded="false"
       >
-        Menu
+        {copy.menu}
       </button>
       <ThemeToggle />
     </div>
@@ -38,12 +45,15 @@ const links = [
   <div class="hidden border-t border-ink/10 px-5 pb-4 dark:border-white/10" id="mobile-menu">
     <div class="mx-auto grid max-w-6xl gap-2">
       {
-        links.map((link) => (
-          <a class="quiet-panel px-4 py-3 text-sm font-medium text-main" href={link.href}>
+        copy.links.map((link) => (
+          <a class="quiet-panel px-4 py-3 text-sm font-medium text-main" href={localizePath(link.path, lang)} aria-current={currentPath === link.path ? "page" : undefined}>
             {link.label}
           </a>
         ))
       }
+      <a class="quiet-panel px-4 py-3 text-sm font-semibold text-main" href={switchHref}>
+        {copy.languageLabel}
+      </a>
     </div>
   </div>
 </header>
