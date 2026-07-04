@@ -15,7 +15,7 @@ export const projects = [
     description:
       "A daily check-in project for tracking postgraduate entrance exam preparation, study habits, and ongoing progress.",
     tech: ["GitHub", "Study Plan", "Daily Check-in"],
-    href: "https://github.com/shihhsingli356/kaoyan-daily-checkin"
+    href: "https://kaoyan-daily-checkin.pages.dev/"
   },
   {
     title: "Future Project Placeholder",
