@@ -1,34 +1,201 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { profile } from "@/data/profile";
+import { profile, socials } from "@/data/profile";
+
+const identityCards = [
+  {
+    label: "Current Role",
+    title: "Aerospace Engineering Student",
+    body: "Studying at Shanghai Jiao Tong University and building a long-term public archive for coursework, projects, and plans."
+  },
+  {
+    label: "Directions",
+    title: "Aerospace / Full-Stack / Quant",
+    body: "Connecting engineering fundamentals with software systems, AI-enabled workflows, and quantitative research tools."
+  },
+  {
+    label: "Current Focus",
+    title: "Systems for Learning",
+    body: "Maintaining project links, course tracking, public roadmaps, and daily check-in workflows."
+  }
+];
+
+const focusAreas = [
+  {
+    title: "Aerospace Engineering",
+    body: "Coursework and engineering foundations around mechanics, control, propulsion, structures, data analysis, and aircraft-related systems.",
+    tags: ["Mechanics", "Control", "Data Analysis"]
+  },
+  {
+    title: "Large Models & Multimodal Processing",
+    body: "Following how language models, multimodal understanding, and AI-assisted workflows can support learning, research, and product tools.",
+    tags: ["LLM", "Multimodal", "AI Workflow"]
+  },
+  {
+    title: "Full-Stack Engineering",
+    body: "Building practical web systems from interface to deployment, with attention to maintainability, data structure, and usable product surfaces.",
+    tags: ["Frontend", "Backend", "Deployment"]
+  },
+  {
+    title: "Quantitative Finance",
+    body: "Exploring systematic trading, market data workflows, backtesting, and strategy execution as a technical research direction.",
+    tags: ["Quant Research", "Backtesting", "MT5"]
+  }
+];
+
+const timeline = [
+  {
+    year: "2022",
+    title: "Entered Shanghai Jiao Tong University",
+    body: "Started undergraduate study at Shanghai Jiao Tong University."
+  },
+  {
+    year: "2022 - 2024",
+    title: "Nursing at SJTU School of Medicine",
+    body: "Studied Nursing at Shanghai Jiao Tong University School of Medicine, while also working on personal entrepreneurship projects."
+  },
+  {
+    year: "2024 - Present",
+    title: "Aerospace Engineering",
+    body: "Transferred focus to Aerospace Engineering, while continuing to build software tools, learning systems, AI-related workflows, and quantitative research interests."
+  },
+  {
+    year: "2027",
+    title: "Expected Graduation",
+    body: "Expected to graduate from Shanghai Jiao Tong University."
+  }
+];
+
+const toolGroups = [
+  {
+    title: "Engineering",
+    items: ["Aerospace Engineering", "Mechanics", "Control", "Data Analysis", "Numerical Methods"]
+  },
+  {
+    title: "Web & Software",
+    items: ["Astro", "TypeScript", "Tailwind CSS", "Python", "GitHub", "Cloudflare Pages", "API Workflows"]
+  },
+  {
+    title: "AI & Multimodal",
+    items: ["Large Language Models", "Multimodal Processing", "Prompted Workflows", "AI-Assisted Tooling"]
+  },
+  {
+    title: "Quant & Trading",
+    items: ["Quantitative Research", "Backtesting", "Market Data", "MT5", "Strategy Tracking"]
+  },
+  {
+    title: "Workflow",
+    items: ["Daily Check-in", "Course Tracking", "Public Roadmap", "Personal Dashboard"]
+  }
+];
 ---
 
 <BaseLayout title="About | LiShihhsing">
-  <section class="mx-auto max-w-4xl px-5 py-12 md:py-16">
-    <div class="panel p-6 md:p-8">
+  <section class="mx-auto max-w-6xl px-5 py-12 md:py-16">
+    <div class="panel overflow-hidden p-6 md:p-8">
+      <div class="absolute -right-16 -top-20 h-52 w-52 bg-iris/20 blur-3xl"></div>
+      <div class="absolute -bottom-20 left-6 h-48 w-48 bg-mint/20 blur-3xl"></div>
       <p class="section-label">About</p>
-      <h1 class="mt-4 font-display text-5xl font-semibold text-main">{profile.name}</h1>
-      <p class="mt-6 text-xl leading-8 text-soft">{profile.summary}</p>
-    </div>
-
-    <div class="mt-5 grid gap-4 md:grid-cols-2">
-      <div class="panel p-6">
-        <p class="text-sm text-muted">Current Identity</p>
-        <h2 class="mt-2 font-display text-2xl font-semibold text-main">{profile.role}</h2>
-        <p class="mt-3 text-soft">{profile.field}</p>
-      </div>
-      <div class="panel p-6">
-        <p class="text-sm text-muted">Education</p>
-        <h2 class="mt-2 font-display text-2xl font-semibold text-main">{profile.school}</h2>
-        <p class="mt-3 text-soft">{profile.enrollmentYear} - {profile.expectedGraduation}</p>
-      </div>
-    </div>
-
-    <section class="panel mt-5 p-6">
-      <h2 class="font-display text-2xl font-semibold text-main">Focus Area</h2>
-      <p class="mt-4 leading-7 text-soft">
-        Current focus: Aerospace Engineering. This page can later be expanded with coursework, research interests, engineering skills, tools, and long-term goals.
+      <h1 class="mt-4 max-w-3xl font-display text-5xl font-semibold leading-tight text-main md:text-6xl">
+        Hi, I’m {profile.name}.
+      </h1>
+      <p class="mt-6 max-w-3xl text-lg leading-8 text-soft md:text-xl">
+        {profile.summary}
       </p>
+    </div>
+
+    <div class="mt-5 grid gap-5 md:grid-cols-3">
+      {
+        identityCards.map((card) => (
+          <article class="panel p-5">
+            <p class="text-sm text-muted">{card.label}</p>
+            <h2 class="mt-3 font-display text-xl font-semibold text-main">{card.title}</h2>
+            <p class="mt-3 text-sm leading-6 text-soft">{card.body}</p>
+          </article>
+        ))
+      }
+    </div>
+
+    <section class="mt-10">
+      <div class="mb-5">
+        <p class="section-label">Focus Areas</p>
+        <h2 class="mt-2 font-display text-3xl font-semibold text-main">What I’m Building Toward</h2>
+      </div>
+      <div class="grid gap-5 md:grid-cols-2">
+        {
+          focusAreas.map((area) => (
+            <article class="panel min-h-[240px] p-6">
+              <h3 class="font-display text-2xl font-semibold text-main">{area.title}</h3>
+              <p class="mt-4 text-sm leading-7 text-soft">{area.body}</p>
+              <div class="mt-5 flex flex-wrap gap-2">
+                {area.tags.map((tag) => (
+                  <span class="glass-button px-3 py-1 text-xs font-semibold">{tag}</span>
+                ))}
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="mt-10 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+      <div class="panel p-6">
+        <p class="section-label">Timeline</p>
+        <h2 class="mt-3 font-display text-3xl font-semibold text-main">Education & Direction</h2>
+        <p class="mt-4 text-sm leading-7 text-soft">
+          A concise record of my academic path and the long-term directions that shape this site.
+        </p>
+      </div>
+      <div class="grid gap-4">
+        {
+          timeline.map((item) => (
+            <article class="quiet-panel grid gap-4 p-5 md:grid-cols-[8rem_1fr]">
+              <p class="font-display text-lg font-semibold text-mint">{item.year}</p>
+              <div>
+                <h3 class="font-display text-xl font-semibold text-main">{item.title}</h3>
+                <p class="mt-2 text-sm leading-6 text-soft">{item.body}</p>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="mt-10">
+      <div class="mb-5">
+        <p class="section-label">Tools</p>
+        <h2 class="mt-2 font-display text-3xl font-semibold text-main">Skills, Tools & Working Systems</h2>
+      </div>
+      <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        {
+          toolGroups.map((group) => (
+            <article class="panel p-5">
+              <h3 class="font-display text-xl font-semibold text-main">{group.title}</h3>
+              <div class="mt-5 flex flex-wrap gap-2">
+                {group.items.map((item) => (
+                  <span class="glass-button px-3 py-1 text-xs font-semibold">{item}</span>
+                ))}
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="panel mt-10 p-6 md:flex md:items-center md:justify-between">
+      <div>
+        <p class="text-sm text-muted">Contact</p>
+        <h2 class="mt-2 font-display text-2xl font-semibold text-main">Social Links & Contact</h2>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-3 md:mt-0">
+        {
+          socials.map((social) => (
+            <a class="glass-button px-4 py-2 text-sm font-semibold transition hover:border-mint" href={social.href} target={social.href.startsWith("http") ? "_blank" : undefined} rel={social.href.startsWith("http") ? "noreferrer" : undefined}>
+              {social.label}
+            </a>
+          ))
+        }
+      </div>
     </section>
   </section>
 </BaseLayout>
