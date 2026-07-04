@@ -15,11 +15,11 @@ export const profile = {
 export const socials = [
   {
     label: "GitHub",
-    href: "https://github.com/placeholder",
+    href: "https://github.com/shihhsingli356",
     description: "项目代码与工程实践"
   },
   {
-    label: "Email",
+    label: "Gmail",
     href: "mailto:shihhsingli356@gmail.com",
     description: "个人联系邮箱"
   },
@@ -29,8 +29,8 @@ export const socials = [
     description: "学校邮箱"
   },
   {
-    label: "Social Placeholder",
-    href: "#",
-    description: "预留社交账号"
+    label: "Bilibili",
+    href: "https://space.bilibili.com/295562144",
+    description: "视频与公开内容"
   }
 ];
