@@ -1,0 +1,106 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Metric from "@/components/Metric.astro";
+import { courses, education } from "@/data/education";
+
+const progress = Math.round((education.completedCourses / education.totalCourses) * 100);
+const pendingCourses = courses.filter((course) => course.status !== "已完成").length;
+const completedCredits = courses
+  .filter((course) => course.status === "已完成")
+  .reduce((sum, course) => sum + course.credits, 0);
+const totalListedCredits = courses.reduce((sum, course) => sum + course.credits, 0);
+---
+
+<BaseLayout title="Education | LiShihhsing">
+  <section class="mx-auto max-w-6xl px-5 py-16">
+    <div class="panel p-6 md:p-8">
+      <p class="section-label">Education</p>
+      <h1 class="mt-4 font-display text-5xl font-semibold text-main">Education Dashboard</h1>
+      <p class="mt-5 max-w-2xl text-lg leading-8 text-soft">
+        Public overview for academic background, course progress, and graduation requirements. Current data is placeholder-only.
+      </p>
+    </div>
+
+    <div class="mt-5 grid gap-4 md:grid-cols-4">
+      <Metric label="School" value={education.school} />
+      <Metric label="Major" value={education.major} />
+      <Metric label="Remaining" value={education.remainingCourses} note="courses left" />
+      <Metric label="Progress" value={`${progress}%`} note={`${education.completedCourses}/${education.totalCourses}`} />
+    </div>
+
+    <div class="mt-5 grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
+      <div class="panel p-6">
+        <p class="text-sm font-semibold text-muted">Graduation Readiness</p>
+        <div class="mt-6 flex items-end justify-between gap-4">
+          <p class="font-display text-6xl font-semibold text-main">{progress}%</p>
+          <p class="pb-2 text-sm text-muted">placeholder data</p>
+        </div>
+        <div class="mt-6 h-4 bg-ink/10 dark:bg-white/10">
+          <div class="h-4 bg-mint" style={`width: ${progress}%`}></div>
+        </div>
+        <div class="mt-6 grid grid-cols-3 gap-3 text-center">
+          <div class="quiet-panel p-3">
+            <p class="text-2xl font-semibold text-main">{education.completedCourses}</p>
+            <p class="mt-1 text-xs text-muted">Completed</p>
+          </div>
+          <div class="quiet-panel p-3">
+            <p class="text-2xl font-semibold text-main">{education.remainingCourses}</p>
+            <p class="mt-1 text-xs text-muted">Remaining</p>
+          </div>
+          <div class="quiet-panel p-3">
+            <p class="text-2xl font-semibold text-main">{pendingCourses}</p>
+            <p class="mt-1 text-xs text-muted">Listed Open</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel p-6">
+        <p class="text-sm font-semibold text-muted">Listed Course Credits</p>
+        <div class="mt-6 grid gap-4 sm:grid-cols-2">
+          <Metric label="Listed Credits" value={totalListedCredits} note="from placeholder rows" />
+          <Metric label="Completed Credits" value={completedCredits} note="from listed courses" />
+        </div>
+        <div class="mt-6 grid gap-3">
+          {
+            courses.map((course) => (
+              <div class="quiet-panel grid grid-cols-[1fr_auto] items-center gap-4 p-3">
+                <div>
+                  <p class="font-medium text-main">{course.name}</p>
+                  <p class="mt-1 text-xs text-muted">{course.category} / {course.term}</p>
+                </div>
+                <span class="text-xs font-semibold text-mint">{course.status}</span>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="panel mt-5 overflow-x-auto">
+      <table class="w-full min-w-[760px] border-collapse text-left text-sm">
+        <thead class="border-b border-ink/10 text-main dark:border-white/10">
+          <tr>
+            <th class="p-4 font-semibold">Course</th>
+            <th class="p-4 font-semibold">Category</th>
+            <th class="p-4 font-semibold">Credits</th>
+            <th class="p-4 font-semibold">Status</th>
+            <th class="p-4 font-semibold">Term</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            courses.map((course) => (
+              <tr class="border-t border-ink/10 dark:border-white/10">
+                <td class="p-4 font-medium text-main">{course.name}</td>
+                <td class="p-4 text-soft">{course.category}</td>
+                <td class="p-4 text-soft">{course.credits}</td>
+                <td class="p-4 text-soft">{course.status}</td>
+                <td class="p-4 text-soft">{course.term}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</BaseLayout>

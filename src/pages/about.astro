@@ -1,0 +1,34 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { profile } from "@/data/profile";
+---
+
+<BaseLayout title="About | LiShihhsing">
+  <section class="mx-auto max-w-4xl px-5 py-12 md:py-16">
+    <div class="panel p-6 md:p-8">
+      <p class="section-label">About</p>
+      <h1 class="mt-4 font-display text-5xl font-semibold text-main">{profile.name}</h1>
+      <p class="mt-6 text-xl leading-8 text-soft">{profile.summary}</p>
+    </div>
+
+    <div class="mt-5 grid gap-4 md:grid-cols-2">
+      <div class="panel p-6">
+        <p class="text-sm text-muted">Current Identity</p>
+        <h2 class="mt-2 font-display text-2xl font-semibold text-main">{profile.role}</h2>
+        <p class="mt-3 text-soft">{profile.field}</p>
+      </div>
+      <div class="panel p-6">
+        <p class="text-sm text-muted">Education</p>
+        <h2 class="mt-2 font-display text-2xl font-semibold text-main">{profile.school}</h2>
+        <p class="mt-3 text-soft">{profile.enrollmentYear} - {profile.expectedGraduation}</p>
+      </div>
+    </div>
+
+    <section class="panel mt-5 p-6">
+      <h2 class="font-display text-2xl font-semibold text-main">Focus Area</h2>
+      <p class="mt-4 leading-7 text-soft">
+        Current focus: Aerospace Engineering. This page can later be expanded with coursework, research interests, engineering skills, tools, and long-term goals.
+      </p>
+    </section>
+  </section>
+</BaseLayout>

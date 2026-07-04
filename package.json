@@ -1,0 +1,22 @@
+{
+  "name": "lishihhsing-personal-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "set ASTRO_TELEMETRY_DISABLED=1&& astro dev --host 127.0.0.1",
+    "build": "set ASTRO_TELEMETRY_DISABLED=1&& astro build",
+    "preview": "set ASTRO_TELEMETRY_DISABLED=1&& astro preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@astrojs/tailwind": "^5.1.5",
+    "astro": "^5.15.4",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "esbuild@0.27.7": true,
+    "esbuild@0.25.12": true,
+    "sharp@0.34.5": true
+  }
+}

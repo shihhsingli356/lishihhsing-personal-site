@@ -1,0 +1,126 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Metric from "@/components/Metric.astro";
+import { education } from "@/data/education";
+import { plans } from "@/data/plans";
+import { profile, socials } from "@/data/profile";
+import { projects } from "@/data/projects";
+
+const progress = Math.round((education.completedCourses / education.totalCourses) * 100);
+---
+
+<BaseLayout title="LiShihhsing | Personal Site">
+  <section class="mx-auto grid max-w-6xl gap-5 px-5 py-10 lg:grid-cols-[1.08fr_0.92fr] lg:py-16">
+    <div class="panel relative overflow-hidden p-6 md:p-8">
+      <div class="glass-line absolute left-0 top-0 h-px w-full"></div>
+      <div class="absolute -right-16 -top-20 h-52 w-52 bg-iris/20 blur-3xl"></div>
+      <div class="absolute -bottom-24 left-10 h-56 w-56 bg-mint/20 blur-3xl"></div>
+      <p class="section-label">Aerospace Engineering / Personal System</p>
+      <h1 class="mt-6 max-w-3xl font-display text-5xl font-semibold leading-[1.02] text-main md:text-7xl">
+        {profile.name}
+      </h1>
+      <p class="mt-6 max-w-2xl text-lg leading-8 text-soft md:text-xl">
+        {profile.summary}
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a class="bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:bg-mint dark:bg-white dark:text-ink dark:hover:bg-mint dark:hover:text-white" href="/projects">View Projects</a>
+        <a class="glass-button px-5 py-3 text-sm font-semibold transition hover:border-mint" href="/education">Education Dashboard</a>
+      </div>
+      <div class="mt-10 grid gap-3 sm:grid-cols-3">
+        <div class="quiet-panel p-4">
+          <p class="text-xs uppercase tracking-[0.16em] text-muted">Role</p>
+          <p class="mt-2 font-semibold text-main">{profile.role}</p>
+        </div>
+        <div class="quiet-panel p-4">
+          <p class="text-xs uppercase tracking-[0.16em] text-muted">School</p>
+          <p class="mt-2 font-semibold text-main">{profile.school}</p>
+        </div>
+        <div class="quiet-panel p-4">
+          <p class="text-xs uppercase tracking-[0.16em] text-muted">Location</p>
+          <p class="mt-2 font-semibold text-main">{profile.location}</p>
+        </div>
+      </div>
+    </div>
+
+    <aside class="grid gap-5">
+      <div class="panel p-6">
+        <div class="absolute -right-12 -top-12 h-32 w-32 bg-coral/15 blur-2xl"></div>
+        <p class="section-label">Academic Snapshot</p>
+        <div class="mt-6 grid gap-4">
+          <Metric label="Major" value={profile.field} />
+          <Metric label="Expected Graduation" value={profile.expectedGraduation} note={profile.school} />
+        </div>
+      </div>
+      <div class="panel p-6">
+        <div class="absolute -left-10 -top-10 h-36 w-36 bg-mint/15 blur-2xl"></div>
+        <div class="flex items-end justify-between gap-4">
+          <div>
+            <p class="text-sm text-muted">Course Progress</p>
+            <p class="mt-2 font-display text-5xl font-semibold text-main">{progress}%</p>
+          </div>
+          <p class="pb-2 text-sm text-muted">{education.completedCourses}/{education.totalCourses}</p>
+        </div>
+        <div class="mt-5 h-3 bg-ink/10 dark:bg-white/10">
+          <div class="h-3 bg-mint" style={`width: ${progress}%`}></div>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-5 py-8">
+    <div class="mb-5 flex items-end justify-between gap-4">
+      <div>
+        <p class="section-label">Selected Work</p>
+        <h2 class="mt-2 font-display text-3xl font-semibold text-main">Project Index</h2>
+      </div>
+      <a class="hidden text-sm font-semibold text-muted hover:text-main md:block" href="/projects">All projects</a>
+    </div>
+    <div class="grid gap-5 md:grid-cols-3">
+      {
+        projects.map((project) => (
+          <a class="panel min-h-[220px] p-5 transition hover:-translate-y-1" href={project.href}>
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-coral">{project.status}</p>
+            <h2 class="mt-3 font-display text-xl font-semibold text-main">{project.title}</h2>
+            <p class="mt-3 text-sm leading-6 text-soft">{project.description}</p>
+            <div class="mt-5 flex flex-wrap gap-2">
+              {project.tech.slice(0, 3).map((item) => <span class="border border-ink/10 px-2.5 py-1 text-xs text-muted dark:border-white/10">{item}</span>)}
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="mx-auto grid max-w-6xl gap-8 px-5 py-12 lg:grid-cols-[0.85fr_1.15fr]">
+    <div class="panel p-6">
+      <p class="section-label">Public Roadmap</p>
+      <h2 class="mt-3 font-display text-3xl font-semibold text-main">Public Plans</h2>
+      <p class="mt-4 leading-7 text-soft">A lightweight roadmap for current work, next steps, and public progress.</p>
+    </div>
+    <div class="grid gap-4 md:grid-cols-2">
+      {
+        plans.map((plan) => (
+          <article class="quiet-panel p-5">
+            <p class="text-sm font-semibold text-coral">{plan.phase}</p>
+            <h3 class="mt-2 font-display text-lg font-semibold text-main">{plan.title}</h3>
+            <ul class="mt-4 space-y-2 text-sm text-soft">
+              {plan.items.map((item) => <li>{item}</li>)}
+            </ul>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-5 pb-16">
+    <div class="panel p-6 md:flex md:items-center md:justify-between">
+      <div>
+        <p class="text-sm text-muted">Contact</p>
+        <h2 class="mt-2 font-display text-2xl font-semibold text-main">Social Links & Contact</h2>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-3 md:mt-0">
+        {socials.map((social) => <a class="glass-button px-4 py-2 text-sm font-semibold transition hover:border-mint" href={social.href}>{social.label}</a>)}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,12 @@
+node_modules
+dist
+.astro
+.vercel
+.netlify
+.env
+.DS_Store
+.agents
+.codex
+work
+outputs
+npm-debug.log*

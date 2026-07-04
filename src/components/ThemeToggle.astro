@@ -1,0 +1,32 @@
+<button
+  class="glass-button inline-flex h-10 min-w-10 items-center justify-center px-3 text-xs font-semibold transition hover:border-mint"
+  id="theme-toggle"
+  type="button"
+  aria-label="Toggle theme"
+  title="Toggle theme"
+>
+  <span id="theme-label">Theme</span>
+</button>
+
+<script>
+  const root = document.documentElement;
+  const stored = localStorage.getItem("theme");
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const label = document.getElementById("theme-label");
+
+  const syncLabel = () => {
+    if (label) label.textContent = root.classList.contains("dark") ? "Dark" : "Light";
+  };
+
+  if (stored === "dark" || (!stored && prefersDark)) {
+    root.classList.add("dark");
+  }
+
+  syncLabel();
+
+  document.getElementById("theme-toggle")?.addEventListener("click", () => {
+    root.classList.toggle("dark");
+    localStorage.setItem("theme", root.classList.contains("dark") ? "dark" : "light");
+    syncLabel();
+  });
+</script>

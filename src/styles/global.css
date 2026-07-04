@@ -1,0 +1,226 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f7f4ee;
+  color: #111217;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+:root.dark {
+  color-scheme: dark;
+  background: #111217;
+  color: #f7f4ee;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 8% 10%, rgb(255 255 255 / 0.95), transparent 16rem),
+    radial-gradient(circle at 78% 12%, rgb(111 111 232 / 0.20), transparent 24rem),
+    radial-gradient(circle at 18% 82%, rgb(47 127 117 / 0.20), transparent 28rem),
+    radial-gradient(circle at 88% 78%, rgb(209 109 68 / 0.16), transparent 26rem),
+    linear-gradient(135deg, #fffaf0 0%, #edf8f7 34%, #f0efff 68%, #fff7ef 100%);
+}
+
+:root.dark body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(123, 213, 202, 0.18), transparent 25rem),
+    radial-gradient(circle at 88% 18%, rgba(139, 139, 255, 0.22), transparent 28rem),
+    radial-gradient(circle at 50% 105%, rgba(209, 109, 68, 0.18), transparent 30rem),
+    linear-gradient(135deg, #080a10 0%, #111827 48%, #17121d 100%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(47, 127, 117, 0.22);
+}
+
+.panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.62);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.82) 0%, rgb(255 255 255 / 0.36) 48%, rgb(255 255 255 / 0.58) 100%),
+    linear-gradient(90deg, rgb(123 213 202 / 0.12), rgb(139 139 255 / 0.11), rgb(209 109 68 / 0.10)),
+    rgb(255 255 255 / 0.28);
+  box-shadow:
+    0 28px 90px rgb(17 18 23 / 0.12),
+    0 10px 32px rgb(17 18 23 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.92),
+    inset 0 -1px 0 rgb(17 18 23 / 0.05);
+  backdrop-filter: blur(34px) saturate(1.75) contrast(1.03);
+  -webkit-backdrop-filter: blur(34px) saturate(1.75) contrast(1.03);
+  border-radius: 8px;
+  color: #111217;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, rgb(255 255 255 / 0.78), transparent 28%),
+    radial-gradient(circle at 12% 8%, rgb(255 255 255 / 0.74), transparent 14rem),
+    radial-gradient(circle at 95% 92%, rgb(123 213 202 / 0.18), transparent 16rem);
+  mix-blend-mode: screen;
+  opacity: 0.72;
+}
+
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  border-radius: 7px;
+  border: 1px solid rgb(255 255 255 / 0.38);
+}
+
+.panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.panel > .absolute,
+.quiet-panel > .absolute {
+  position: absolute;
+}
+
+:root.dark .panel {
+  border-color: rgb(255 255 255 / 0.16);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.15), rgb(255 255 255 / 0.055)),
+    rgb(17 18 23 / 0.34);
+  box-shadow: 0 28px 90px rgb(0 0 0 / 0.38), inset 0 1px 0 rgb(255 255 255 / 0.12);
+  color: #f7f4ee;
+}
+
+:root.dark .panel::before {
+  opacity: 0.18;
+}
+
+:root.dark .panel::after {
+  border-color: rgb(255 255 255 / 0.08);
+}
+
+.quiet-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.50);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.64), rgb(255 255 255 / 0.28)),
+    rgb(255 255 255 / 0.22);
+  box-shadow:
+    0 14px 42px rgb(17 18 23 / 0.07),
+    inset 0 1px 0 rgb(255 255 255 / 0.78);
+  backdrop-filter: blur(26px) saturate(1.55);
+  -webkit-backdrop-filter: blur(26px) saturate(1.55);
+  border-radius: 8px;
+  color: #111217;
+}
+
+.quiet-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgb(255 255 255 / 0.52), transparent 38%);
+  opacity: 0.58;
+}
+
+.quiet-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.liquid-orb {
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+:root.dark .quiet-panel {
+  border-color: rgb(255 255 255 / 0.13);
+  background: rgb(255 255 255 / 0.075);
+  color: #f7f4ee;
+}
+
+:root.dark .quiet-panel::before {
+  opacity: 0.12;
+}
+
+.glass-line {
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.92), rgb(123 213 202 / 0.66), rgb(139 139 255 / 0.55), transparent);
+}
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #2f7f75;
+}
+
+.dark .section-label {
+  color: #7bd5ca;
+}
+
+.text-main {
+  color: #111217;
+}
+
+.dark .text-main {
+  color: #f7f4ee;
+}
+
+.text-soft {
+  color: rgb(17 18 23 / 0.68);
+}
+
+.dark .text-soft {
+  color: rgb(247 244 238 / 0.74);
+}
+
+.text-muted {
+  color: rgb(17 18 23 / 0.52);
+}
+
+.dark .text-muted {
+  color: rgb(247 244 238 / 0.56);
+}
+
+.glass-button {
+  border: 1px solid rgb(255 255 255 / 0.58);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.72), rgb(255 255 255 / 0.30)),
+    rgb(255 255 255 / 0.26);
+  color: #111217;
+  box-shadow: 0 10px 30px rgb(17 18 23 / 0.07), inset 0 1px 0 rgb(255 255 255 / 0.76);
+  backdrop-filter: blur(22px) saturate(1.45);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+}
+
+.dark .glass-button {
+  border-color: rgb(255 255 255 / 0.16);
+  background: rgb(255 255 255 / 0.08);
+  color: #f7f4ee;
+}
