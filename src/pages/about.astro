@@ -92,16 +92,33 @@ const toolGroups = [
 
 <BaseLayout title="About | LiShihhsing">
   <section class="mx-auto max-w-6xl px-5 py-12 md:py-16">
-    <div class="panel overflow-hidden p-6 md:p-8">
+    <div class="panel grid gap-6 overflow-hidden p-6 md:p-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
       <div class="absolute -right-16 -top-20 h-52 w-52 bg-iris/20 blur-3xl"></div>
       <div class="absolute -bottom-20 left-6 h-48 w-48 bg-mint/20 blur-3xl"></div>
-      <p class="section-label">About</p>
-      <h1 class="mt-4 max-w-3xl font-display text-5xl font-semibold leading-tight text-main md:text-6xl">
-        Hi, I’m {profile.name}.
-      </h1>
-      <p class="mt-6 max-w-3xl text-lg leading-8 text-soft md:text-xl">
-        {profile.summary}
-      </p>
+      <div>
+        <p class="section-label">About</p>
+        <h1 class="mt-4 max-w-3xl font-display text-5xl font-semibold leading-tight text-main md:text-6xl">
+          Hi, I'm {profile.name}.
+        </h1>
+        <p class="mt-6 max-w-3xl text-lg leading-8 text-soft md:text-xl">
+          {profile.summary}
+        </p>
+      </div>
+      <figure class="quiet-panel p-3">
+        <div class="overflow-hidden rounded-[6px] border border-white/40 bg-white/20">
+          <img
+            src="/profile.jpg"
+            alt="Portrait of LiShihhsing"
+            class="aspect-[4/5] w-full object-cover object-top"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+        <figcaption class="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-sm text-muted">
+          <span>LiShihhsing</span>
+          <span>Shanghai Jiao Tong University</span>
+        </figcaption>
+      </figure>
     </div>
 
     <div class="mt-5 grid gap-5 md:grid-cols-3">
@@ -119,7 +136,7 @@ const toolGroups = [
     <section class="mt-10">
       <div class="mb-5">
         <p class="section-label">Focus Areas</p>
-        <h2 class="mt-2 font-display text-3xl font-semibold text-main">What I’m Building Toward</h2>
+        <h2 class="mt-2 font-display text-3xl font-semibold text-main">What I'm Building Toward</h2>
       </div>
       <div class="grid gap-5 md:grid-cols-2">
         {
