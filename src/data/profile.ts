@@ -8,7 +8,7 @@ export const profile = {
   expectedGraduation: "2027",
   location: "Shanghai, China",
   summary:
-    "航空航天工程学生，正在构建一个用于展示个人项目、学业进度、公开计划和专业方向的长期个人站。",
+    "上海交通大学航空航天工程学生，关注航空航天工程、大模型与多模态处理、全栈工程和金融量化方向。这个网站用于长期整理我的项目、课程进度、公开计划和阶段性成果。",
   emails: ["shihhsingli356@gmail.com", "li-shih-hsing@sjtu.edu.cn"]
 };
 
