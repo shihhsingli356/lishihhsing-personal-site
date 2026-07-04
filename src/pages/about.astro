@@ -92,7 +92,7 @@ const toolGroups = [
 
 <BaseLayout title="About | LiShihhsing">
   <section class="mx-auto max-w-6xl px-5 py-12 md:py-16">
-    <div class="panel grid gap-6 overflow-hidden p-6 md:p-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
+    <div class="panel grid gap-6 overflow-hidden p-6 md:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
       <div class="absolute -right-16 -top-20 h-52 w-52 bg-iris/20 blur-3xl"></div>
       <div class="absolute -bottom-20 left-6 h-48 w-48 bg-mint/20 blur-3xl"></div>
       <div>
@@ -104,12 +104,12 @@ const toolGroups = [
           {profile.summary}
         </p>
       </div>
-      <figure class="quiet-panel p-3">
+      <figure class="quiet-panel w-full max-w-sm justify-self-center p-3 lg:w-[22rem] lg:justify-self-end">
         <div class="overflow-hidden rounded-[6px] border border-white/40 bg-white/20">
           <img
             src="/profile.jpg"
             alt="Portrait of LiShihhsing"
-            class="aspect-[4/5] w-full object-cover object-top"
+            class="h-[22rem] w-full object-cover object-top md:h-[24rem] lg:h-[22rem]"
             loading="eager"
             decoding="async"
           />
