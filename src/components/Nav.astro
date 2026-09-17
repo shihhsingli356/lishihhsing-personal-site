@@ -26,6 +26,7 @@ const linkClass = (path: string) =>
             </a>
           ))
         }
+        <a class="glass-button px-3 py-2 text-sm font-semibold" href="/workspace/">{lang === "zh" ? "工作区" : "Workspace"}</a>
         <a class="glass-button px-3 py-2 text-sm font-semibold transition hover:border-mint" href={switchHref}>
           {copy.languageLabel}
         </a>
@@ -51,6 +52,7 @@ const linkClass = (path: string) =>
           </a>
         ))
       }
+      <a class="quiet-panel px-4 py-3 text-sm font-semibold text-main" href="/workspace/">{lang === "zh" ? "工作区" : "Workspace"}</a>
       <a class="quiet-panel px-4 py-3 text-sm font-semibold text-main" href={switchHref}>
         {copy.languageLabel}
       </a>
