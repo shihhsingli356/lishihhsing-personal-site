@@ -172,6 +172,54 @@ test("soft delete and restore preserve record data", () => {
   assert.ok(live(s, "tasks").includes(t));
   assert.equal(t.title, title);
 });
+test("debts validate payments and survive copy import with remapped links", () => {
+  const raw = emptyState();
+  raw.projects.push({ id: "debt-project", title: "家庭财务" });
+  raw.accounts.push({
+    id: "debt-account",
+    title: "还款账户",
+    type: "bank",
+    currency: "CNY",
+    rate: 1,
+    openingCents: 0,
+  });
+  raw.debts.push({
+    id: "debt-one",
+    title: "学费分期",
+    project: "debt-project",
+    account: "debt-account",
+    kind: "payable",
+    principalCents: 100000,
+    currency: "CNY",
+    rate: 1,
+    date: "2026-09-01",
+    dueDate: "2026-12-01",
+    payments: [
+      { id: "payment-one", date: "2026-09-18", cents: 25000, memo: "首期" },
+    ],
+  });
+  const incoming = normalize(raw);
+  assert.equal(incoming.version, 4);
+  assert.equal(incoming.debts[0].payments[0].cents, 25000);
+  const destination = emptyState();
+  importCopy(destination, incoming);
+  const copied = destination.debts[0];
+  assert.notEqual(copied.id, "debt-one");
+  assert.notEqual(copied.project, "debt-project");
+  assert.notEqual(copied.account, "debt-account");
+  assert.equal(destination.projects[0].id, copied.project);
+  assert.equal(destination.accounts[0].id, copied.account);
+
+  raw.debts[0].payments.push({
+    id: "payment-two",
+    date: "2026-09-19",
+    cents: 80000,
+  });
+  assert.throws(() => normalize(raw), /还款总额/);
+  raw.debts[0].payments.pop();
+  raw.debts[0].dueDate = "2026-08-31";
+  assert.throws(() => normalize(raw), /到期日/);
+});
 test("history deduplicates and keeps at most thirty versions", () => {
   const n = { title: "A", body: "original", history: [] };
   noteCheckpoint(n);

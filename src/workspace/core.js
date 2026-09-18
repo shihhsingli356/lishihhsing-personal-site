@@ -13,6 +13,7 @@ export const collections = [
   "events",
   "accounts",
   "ledger",
+  "debts",
   "focus",
   "budgets",
 ];
@@ -146,7 +147,7 @@ export function taskProgress(task, start, end) {
 }
 export function emptyState() {
   return {
-    version: 3,
+    version: 4,
     projects: [],
     goals: [],
     tasks: [],
@@ -154,6 +155,7 @@ export function emptyState() {
     events: [],
     accounts: [],
     ledger: [],
+    debts: [],
     focus: [],
     budgets: [],
     focusDraft: null,
@@ -164,7 +166,7 @@ export function normalize(raw) {
   if (
     !raw ||
     typeof raw !== "object" ||
-    (raw.version && ![1, 2, 3].includes(raw.version))
+    (raw.version && ![1, 2, 3, 4].includes(raw.version))
   )
     throw Error("不支持的备份版本");
   if (
@@ -191,6 +193,7 @@ export function normalize(raw) {
         title: str(x.title, "未命名"),
         deletedAt: str(x.deletedAt),
         updatedAt: str(x.updatedAt),
+        createdAt: str(x.createdAt || x.updatedAt),
       };
       if (k === "projects")
         return {
@@ -373,6 +376,66 @@ export function normalize(raw) {
           memo: str(x.memo),
         };
       }
+      if (k === "debts") {
+        if (!validDay(x.date) || (x.dueDate && !validDay(x.dueDate)))
+          throw Error("债务日期无效");
+        if (x.dueDate && x.dueDate < x.date)
+          throw Error("到期日不能早于起始日");
+        if (
+          !Number.isSafeInteger(x.principalCents) ||
+          x.principalCents <= 0 ||
+          x.principalCents > 99999999999
+        )
+          throw Error("债务金额无效");
+        const rate = Number(x.rate ?? 1),
+          paymentIds = new Set();
+        if (!Number.isFinite(rate) || rate <= 0 || rate > 1000000)
+          throw Error("债务汇率无效");
+        const payments = (Array.isArray(x.payments) ? x.payments : [])
+          .slice(0, 500)
+          .map((payment) => {
+            if (
+              !payment ||
+              !/^[\w-]{1,100}$/.test(payment.id) ||
+              paymentIds.has(payment.id) ||
+              !validDay(payment.date) ||
+              !Number.isSafeInteger(payment.cents) ||
+              payment.cents <= 0
+            )
+              throw Error("还款记录无效");
+            paymentIds.add(payment.id);
+            return {
+              id: payment.id,
+              date: payment.date,
+              cents: payment.cents,
+              memo: str(payment.memo),
+              createdAt: str(payment.createdAt),
+            };
+          });
+        if (
+          payments.reduce((sum, payment) => sum + payment.cents, 0) >
+          x.principalCents
+        )
+          throw Error("还款总额不能超过债务金额");
+        return {
+          ...y,
+          project,
+          kind: allowed(x.kind, ["payable", "receivable"], "payable"),
+          party: str(x.party),
+          principalCents: x.principalCents,
+          currency: allowed(
+            x.currency,
+            ["CNY", "USD", "HKD", "EUR", "JPY", "GBP"],
+            "CNY",
+          ),
+          rate,
+          date: x.date,
+          dueDate: x.dueDate || "",
+          account: str(x.account),
+          memo: str(x.memo),
+          payments,
+        };
+      }
       if (k === "focus")
         return {
           ...y,
@@ -438,7 +501,15 @@ export function normalize(raw) {
       segments,
     };
   }
-  for (const k of ["goals", "tasks", "notes", "events", "ledger", "focus"])
+  for (const k of [
+    "goals",
+    "tasks",
+    "notes",
+    "events",
+    "ledger",
+    "debts",
+    "focus",
+  ])
     for (const x of s[k])
       if (x.project && !s.projects.some((p) => p.id === x.project))
         x.project = "";
@@ -611,6 +682,7 @@ export function importCopy(state, incoming) {
         if (map.has(x.account)) x.account = map.get(x.account);
         if (map.has(x.toAccount)) x.toAccount = map.get(x.toAccount);
       }
+      if (k === "debts" && map.has(x.account)) x.account = map.get(x.account);
       if (
         k === "notes" &&
         x.type === "diary" &&

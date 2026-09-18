@@ -658,6 +658,151 @@ input[type="checkbox"] {
 .ledger-summary span {
   color: var(--workspace-muted);
 }
+.project-detail {
+  margin-top: 30px;
+}
+.project-head {
+  position: sticky;
+  top: 14px;
+  z-index: 4;
+  box-shadow: 0 8px 34px #0000000d;
+}
+.project-head h2,
+.project-head p,
+.project-section h2,
+.project-section-title {
+  margin: 0;
+}
+.project-head > .actions {
+  margin-top: 18px;
+}
+.project-section-title {
+  padding: 12px 4px 14px;
+}
+.project-goals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.project-goals .goal-card {
+  margin: 0;
+}
+.goal-task-group {
+  margin-top: 20px;
+  padding-top: 4px;
+  border-top: 1px solid var(--workspace-line);
+}
+.goal-task-group h3 {
+  color: var(--workspace-muted);
+  font-size: 13px;
+  margin-bottom: 0;
+}
+.project-section {
+  margin-top: 20px;
+}
+.project-section > h2 {
+  margin-bottom: 10px;
+}
+.project-support {
+  margin-top: 0;
+}
+.project-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--workspace-line);
+}
+.project-link-row:last-child {
+  border-bottom: 0;
+}
+.project-link-row > button:first-child {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  padding-left: 0;
+}
+.project-link-row small {
+  display: block;
+  color: var(--workspace-muted);
+}
+.debt-section {
+  margin-top: 20px;
+}
+.debt-section > .row {
+  align-items: flex-start;
+}
+.debt-section h2 {
+  margin: 0 0 8px;
+}
+.debt-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: var(--workspace-muted);
+  font-size: 13px;
+}
+.debt-totals strong {
+  color: var(--workspace-text);
+  font-variant-numeric: tabular-nums;
+}
+.debt-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.debt-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--workspace-border);
+  border-left: 4px solid #df704d;
+  border-radius: 15px;
+  background: var(--workspace-surface-muted);
+}
+.debt-card.receivable {
+  border-left-color: #3e9b75;
+}
+.debt-card.settled {
+  opacity: 0.72;
+}
+.debt-card h3 {
+  margin: 5px 0 1px;
+}
+.debt-kind {
+  color: var(--workspace-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.debt-balance {
+  display: grid;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.debt-balance strong {
+  font-size: 18px;
+}
+.debt-card progress {
+  width: 100%;
+  height: 7px;
+  margin: 16px 0 10px;
+}
+.debt-actions {
+  align-items: flex-end;
+}
+.debt-payment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--workspace-line);
+  font-size: 13px;
+}
+.debt-payment:last-child {
+  border-bottom: 0;
+}
 .income {
   color: #359d79;
 }
@@ -855,6 +1000,13 @@ input[type="checkbox"] {
   .grid,
   .split {
     grid-template-columns: 1fr;
+  }
+  .project-goals,
+  .debt-list {
+    grid-template-columns: 1fr;
+  }
+  .project-head {
+    position: static;
   }
   .day {
     min-height: 78px;

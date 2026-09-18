@@ -25,7 +25,8 @@ export function createFeatures(ctx) {
   let ledgerMonth = today().slice(0, 7),
     ledgerKind = "all",
     ledgerCategory = "",
-    ledgerQuery = "";
+    ledgerQuery = "",
+    debtShowSettled = false;
   let focusTab = "timer",
     rangeKind = "week",
     rangeDay = today(),
@@ -207,6 +208,47 @@ export function createFeatures(ctx) {
       });
     return holdings;
   }
+  const debtPaid = (debt) =>
+    debt.payments.reduce((sum, payment) => sum + payment.cents, 0);
+  const debtRemaining = (debt) => debt.principalCents - debtPaid(debt);
+  const debtBaseRemaining = (debt) =>
+    Math.round(debtRemaining(debt) * Number(debt.rate || 1));
+  function debtCard(debt) {
+    const paid = debtPaid(debt),
+      remaining = debtRemaining(debt),
+      settled = remaining === 0,
+      overdue = !settled && debt.dueDate && debt.dueDate < today(),
+      label = debt.kind === "payable" ? "应还" : "应收";
+    return `<article class="debt-card ${debt.kind} ${settled ? "settled" : ""}"><div class="row"><div><span class="debt-kind">${label}</span><h3>${esc(debt.title)}</h3><small>${esc(debt.party || "未填往来方")} · ${debt.date}${debt.dueDate ? " → " + debt.dueDate : ""}${overdue ? " · 已逾期" : settled ? " · 已结清" : ""}</small></div><div class="debt-balance"><small>剩余</small><strong>${currencySymbols[debt.currency] || debt.currency} ${money(remaining)}</strong>${debt.currency !== "CNY" ? `<small>≈ ¥ ${money(debtBaseRemaining(debt))}</small>` : ""}</div></div><progress max="${debt.principalCents}" value="${paid}" aria-label="${esc(debt.title)}结清进度"></progress><div class="row debt-actions"><small>本金 ${currencySymbols[debt.currency] || debt.currency} ${money(debt.principalCents)}${debt.account ? " · " + esc(accountName(debt.account)) : ""}</small><div class="actions">${!settled ? button(debt.kind === "payable" ? "记还款" : "记收款", "debt-payment", debt.id) : ""}${button("编辑", "debt-edit", debt.id)}${button("删除", "delete", debt.id, 'data-kind="debts"')}</div></div>${debt.memo ? `<p>${esc(debt.memo)}</p>` : ""}${
+      debt.payments.length
+        ? `<details><summary>${debt.kind === "payable" ? "还款" : "收款"}记录 · ${debt.payments.length}</summary>${debt.payments
+            .slice()
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .map(
+              (payment) =>
+                `<div class="debt-payment"><span>${payment.date}${payment.memo ? " · " + esc(payment.memo) : ""}</span><strong>${currencySymbols[debt.currency] || debt.currency} ${money(payment.cents)}</strong>${button("编辑", "debt-payment", debt.id, `data-payment="${payment.id}"`)}</div>`,
+            )
+            .join("")}</details>`
+        : ""
+    }</article>`;
+  }
+  function debtSection() {
+    const debts = current()
+        .debts.filter((debt) => !debt.deletedAt)
+        .sort((a, b) =>
+          (a.dueDate || "9999-12-31").localeCompare(b.dueDate || "9999-12-31"),
+        ),
+      active = debts.filter((debt) => debtRemaining(debt) > 0),
+      settled = debts.filter((debt) => debtRemaining(debt) === 0),
+      payable = active
+        .filter((debt) => debt.kind === "payable")
+        .reduce((sum, debt) => sum + debtBaseRemaining(debt), 0),
+      receivable = active
+        .filter((debt) => debt.kind === "receivable")
+        .reduce((sum, debt) => sum + debtBaseRemaining(debt), 0),
+      shown = debtShowSettled ? settled : active;
+    return `<section class="card debt-section"><div class="row"><div><h2>债务</h2><div class="debt-totals"><span>应还 <strong>¥ ${money(payable)}</strong></span><span>应收 <strong>¥ ${money(receivable)}</strong></span><span>净债务 <strong>¥ ${money(payable - receivable)}</strong></span></div></div><div class="actions">${button(debtShowSettled ? `进行中 · ${active.length}` : `已结清 · ${settled.length}`, "debt-toggle")}${button("导出", "debt-export")}${button("新增债务", "debt-edit", "", 'class="primary"')}</div></div><div class="debt-list">${shown.map(debtCard).join("") || `<div class="empty">${debtShowSettled ? "暂无已结清债务" : "暂无债务"}</div>`}</div></section>`;
+  }
   function renderLedger(c) {
     const all = current().ledger.filter(
       (record) => !record.deletedAt && record.date.startsWith(ledgerMonth),
@@ -257,6 +299,7 @@ export function createFeatures(ctx) {
       <form id="ledger-filter" class="filter-bar"><label>月份<input type="month" name="month" value="${ledgerMonth}" required></label><label>类型<select name="kind">${[["all", "全部"], ...ledgerKinds].map(([value, label]) => `<option value="${value}" ${ledgerKind === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label>分类<select name="category"><option value="">全部分类</option>${[...new Set([...categories, ...all.map((record) => record.category)])].map((category) => `<option ${ledgerCategory === category ? "selected" : ""}>${esc(category)}</option>`).join("")}</select></label><label>搜索<input name="query" value="${esc(ledgerQuery)}" placeholder="名称、账户或投资标的"></label><button>筛选</button></form>
       <div class="metrics ledger-metrics"><div><small>收入</small><strong>¥ ${money(income)}</strong></div><div><small>支出</small><strong>¥ ${money(expense)}</strong></div><div><small>净收支</small><strong>¥ ${money(income - expense)}</strong></div><div><small>账户资产</small><strong>¥ ${money(deposits)}</strong></div><div><small>投资净额</small><strong>¥ ${money(invested)}</strong></div><div><small>${budget ? (expense > budget.cents ? "超出预算" : "预算剩余") : "月预算"}</small><strong>${budget ? "¥ " + money(Math.abs(budget.cents - expense)) : "未设置"}</strong></div></div>
       ${budget ? `<div class="card budget-card"><div class="row"><span>预算 ¥ ${money(budget.cents)}</span><span>${Math.round((expense / budget.cents) * 100)}%</span></div><progress max="${budget.cents}" value="${Math.min(expense, budget.cents)}"></progress></div>` : ""}
+      ${debtSection()}
       <div class="grid ledger-grid"><section class="card"><h2>账户</h2>${
         activeAccounts()
           .map((account) => {
@@ -403,6 +446,172 @@ export function createFeatures(ctx) {
       $("#f-rate").value = account.rate || 1;
     };
     toggleFields();
+  }
+  function editDebt(id = "") {
+    const debt = current().debts.find((item) => item.id === id),
+      accounts = activeAccounts(),
+      accountOptions = [
+        ["", "未关联账户"],
+        ...accounts.map((account) => [account.id, account.title]),
+      ];
+    modal(
+      debt ? "编辑债务" : "新增债务",
+      select(
+        "类型",
+        "kind",
+        [
+          ["payable", "我需要还"],
+          ["receivable", "对方需要还"],
+        ],
+        debt?.kind || "payable",
+      ) +
+        field("债务名称", "title", debt?.title, "text", true) +
+        field("往来方", "party", debt?.party) +
+        field(
+          "本金",
+          "amount",
+          debt ? (debt.principalCents / 100).toFixed(2) : "",
+          "text",
+          true,
+        ) +
+        select("币种", "currency", currencies, debt?.currency || "CNY") +
+        field("兑人民币汇率", "rate", debt?.rate || 1, "number", true) +
+        `<div class="grid">${field("起始日", "date", debt?.date || today(), "date", true)}${field("到期日", "dueDate", debt?.dueDate || "", "date")}</div>` +
+        select("关联账户", "account", accountOptions, debt?.account || "") +
+        projectField(debt?.project || "") +
+        area("备注", "memo", debt?.memo),
+      async (values) => {
+        if (!values.title.trim() || !validDay(values.date))
+          throw Error("请填写名称和起始日");
+        if (
+          values.dueDate &&
+          (!validDay(values.dueDate) || values.dueDate < values.date)
+        )
+          throw Error("请填写有效的到期日");
+        const principalCents = moneyCents(values.amount),
+          paid = debt ? debtPaid(debt) : 0,
+          rate = Number(values.rate);
+        if (principalCents < paid) throw Error("本金不能小于已记录的还款");
+        if (!Number.isFinite(rate) || rate <= 0) throw Error("请填写有效汇率");
+        const next = {
+          title: values.title.trim(),
+          kind: values.kind,
+          party: values.party.trim(),
+          principalCents,
+          currency: values.currency,
+          rate,
+          date: values.date,
+          dueDate: values.dueDate,
+          account: values.account,
+          project: values.project,
+          memo: values.memo,
+          updatedAt: new Date().toISOString(),
+        };
+        if (debt) Object.assign(debt, next);
+        else
+          current().debts.push({
+            id: uid(),
+            createdAt: new Date().toISOString(),
+            payments: [],
+            ...next,
+          });
+        await save();
+      },
+    );
+    $("#f-amount").inputMode = "decimal";
+    $("#f-rate").step = "any";
+    $("#f-account").onchange = () => {
+      const account = accounts.find(
+        (item) => item.id === $("#f-account").value,
+      );
+      if (!account) return;
+      $("#f-currency").value = account.currency;
+      $("#f-rate").value = account.rate || 1;
+    };
+  }
+  function editDebtPayment(debtId, paymentId = "") {
+    const debt = current().debts.find((item) => item.id === debtId),
+      payment = debt?.payments.find((item) => item.id === paymentId);
+    if (!debt) return;
+    const available = debtRemaining(debt) + (payment?.cents || 0),
+      verb = debt.kind === "payable" ? "还款" : "收款";
+    modal(
+      payment ? "编辑" + verb : "记" + verb,
+      field(
+        verb + "金额",
+        "amount",
+        payment
+          ? (payment.cents / 100).toFixed(2)
+          : (available / 100).toFixed(2),
+        "text",
+        true,
+      ) +
+        field("日期", "date", payment?.date || today(), "date", true) +
+        field("备注", "memo", payment?.memo || ""),
+      async (values) => {
+        if (!validDay(values.date)) throw Error("请填写有效日期");
+        const cents = moneyCents(values.amount);
+        if (cents > available) throw Error(verb + "金额不能超过剩余金额");
+        const next = {
+          date: values.date,
+          cents,
+          memo: values.memo,
+          createdAt: payment?.createdAt || new Date().toISOString(),
+        };
+        if (payment) Object.assign(payment, next);
+        else debt.payments.push({ id: uid(), ...next });
+        debt.updatedAt = new Date().toISOString();
+        await save();
+      },
+    );
+    $("#f-amount").inputMode = "decimal";
+  }
+  function exportDebts() {
+    const safe = (value) =>
+      '"' +
+      String(value ?? "")
+        .replace(/^[=+@\-\t\r]/, "\u0027$&")
+        .replaceAll('"', '""') +
+      '"';
+    const rows = current()
+      .debts.filter((debt) => !debt.deletedAt)
+      .map((debt) => [
+        debt.kind === "payable" ? "应还" : "应收",
+        debt.title,
+        debt.party,
+        (debt.principalCents / 100).toFixed(2),
+        (debtPaid(debt) / 100).toFixed(2),
+        (debtRemaining(debt) / 100).toFixed(2),
+        debt.currency,
+        debt.rate,
+        debt.date,
+        debt.dueDate,
+        accountName(debt.account),
+        debt.memo,
+      ]);
+    const csv = [
+      [
+        "类型",
+        "名称",
+        "往来方",
+        "本金",
+        "已还/已收",
+        "剩余",
+        "币种",
+        "汇率",
+        "起始日",
+        "到期日",
+        "账户",
+        "备注",
+      ],
+      ...rows,
+    ]
+      .map((row) => row.map(safe).join(","))
+      .join("\r\n");
+    ctx.download(
+      new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
+      "债务-" + today() + ".csv",
+    );
   }
   function accountDialog(id = "") {
     const account = current().accounts.find((item) => item.id === id);
@@ -651,10 +860,17 @@ export function createFeatures(ctx) {
           input.step = "1";
         });
   }
-  async function route(action, id) {
+  async function route(action, id, trigger) {
     if (action === "ledger-edit") editLedger(id);
     else if (action === "ledger-accounts") manageAccounts();
     else if (action === "ledger-account-edit") accountDialog(id);
+    else if (action === "debt-edit") editDebt(id);
+    else if (action === "debt-payment")
+      editDebtPayment(id, trigger?.dataset.payment || "");
+    else if (action === "debt-toggle") {
+      debtShowSettled = !debtShowSettled;
+      render();
+    } else if (action === "debt-export") exportDebts();
     else if (action === "ledger-budget") {
       const b = current().budgets.find(
         (b) => !b.deletedAt && b.month === ledgerMonth,

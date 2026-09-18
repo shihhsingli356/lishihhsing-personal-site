@@ -62,7 +62,7 @@ function sample() {
 
 test("legacy notes migrate to multiple projects without losing a single association", () => {
   const s = normalize({ ...sample(), version: 2 });
-  assert.equal(s.version, 3);
+  assert.equal(s.version, 4);
   assert.deepEqual(s.notes[0].projects, ["p1"]);
   s.notes[0].projects = ["p1", "p2", "missing", "p1"];
   s.notes[0].tags = ["研究", "研究"];

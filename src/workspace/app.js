@@ -67,6 +67,7 @@ let view = "today",
   rememberedNoteSelection = "";
 let noteKind = "document";
 let noteToolsMode = "markdown";
+let projectSort = "timeAsc";
 let toastTimer,
   saveQueue = Promise.resolve(),
   persistError = false,
@@ -92,6 +93,7 @@ const collectionNames = {
   events: "日程",
   accounts: "账户",
   ledger: "账目",
+  debts: "债务",
   focus: "专注记录",
   budgets: "预算",
 };
@@ -489,7 +491,12 @@ function editProject(id) {
       if (!v.title.trim()) throw Error("请填写项目名称");
       if (p) Object.assign(p, v);
       else {
-        const x = { id: uid(), ...v, archived: false };
+        const x = {
+          id: uid(),
+          ...v,
+          archived: false,
+          createdAt: new Date().toISOString(),
+        };
         state.projects.push(x);
         projectId = x.id;
       }
@@ -601,6 +608,7 @@ function editTask(id = "", defaults = {}) {
       else
         state.tasks.push({
           id: uid(),
+          createdAt: new Date().toISOString(),
           done: false,
           completedOn: "",
           completedDates: [],
@@ -682,6 +690,14 @@ function editTask(id = "", defaults = {}) {
     $("#f-repeat")?.addEventListener("change", paintScheduleFields);
   };
   $("#f-scheduleType").addEventListener("change", paintScheduleFields);
+  $("#f-goal").addEventListener("change", () => {
+    const goal = state.goals.find((goal) => goal.id === $("#f-goal").value);
+    if (goal) $("#f-project").value = goal.project;
+  });
+  $("#f-project").addEventListener("change", () => {
+    const goal = state.goals.find((goal) => goal.id === $("#f-goal").value);
+    if (goal && goal.project !== $("#f-project").value) $("#f-goal").value = "";
+  });
   paintScheduleFields();
 }
 function quickTask(text) {
@@ -689,6 +705,7 @@ function quickTask(text) {
   change(() =>
     state.tasks.unshift({
       id: uid(),
+      createdAt: new Date().toISOString(),
       title: text.trim(),
       date: "",
       project: "",
@@ -755,7 +772,12 @@ function editGoal(id = "") {
         const shift = !!v.shift;
         delete v.shift;
         applyGoal(state, g, v, shift);
-      } else state.goals.push({ id: uid(), ...v });
+      } else
+        state.goals.push({
+          id: uid(),
+          createdAt: new Date().toISOString(),
+          ...v,
+        });
       rangeStart = "";
       rangeEnd = "";
       rangeMode = false;
@@ -828,7 +850,13 @@ function editEvent(id = "", day = selectedDay) {
       if (v.repeat === "none") v.until = "";
       if (event) {
         Object.assign(event, v);
-      } else state.events.push({ id: uid(), exceptions: [], ...v });
+      } else
+        state.events.push({
+          id: uid(),
+          createdAt: new Date().toISOString(),
+          exceptions: [],
+          ...v,
+        });
       await save();
       message("日程已保存");
     },
@@ -952,8 +980,40 @@ function eventList(day) {
       .join("") || blank("当天没有日程")
   );
 }
-function goalCard(g) {
-  const ts = live(state, "tasks", true).filter((t) => t.goal === g.id),
+function projectTime(item, kind) {
+  if (kind === "goals") return item.end || item.start || "";
+  if (kind === "tasks") return item.endDate || item.until || item.date || "";
+  if (kind === "events") return (item.date || "") + " " + (item.start || "");
+  return item.date || "";
+}
+function sortProjectRecords(items, kind) {
+  const byCreated = projectSort.startsWith("created"),
+    descending = projectSort.endsWith("Desc");
+  return items.slice().sort((a, b) => {
+    const av = byCreated
+        ? a.createdAt || a.updatedAt || projectTime(a, kind)
+        : projectTime(a, kind),
+      bv = byCreated
+        ? b.createdAt || b.updatedAt || projectTime(b, kind)
+        : projectTime(b, kind);
+    if (!av && bv) return 1;
+    if (!bv && av) return -1;
+    const result =
+      av.localeCompare(bv) || a.title.localeCompare(b.title, "zh-CN");
+    return descending ? -result : result;
+  });
+}
+const projectSortNames = {
+  timeAsc: "时间近→远",
+  timeDesc: "时间远→近",
+  createdDesc: "新建→早期",
+  createdAsc: "早期→新建",
+};
+function goalCard(g, projectView = false) {
+  const ts = sortProjectRecords(
+      live(state, "tasks", true).filter((t) => t.goal === g.id),
+      "tasks",
+    ),
     stats = taskStats(ts, g.start, g.end),
     percent = stats.total ? Math.round((stats.done / stats.total) * 100) : 0,
     left = dayDiff(today(), g.end),
@@ -970,7 +1030,10 @@ function goalCard(g) {
         t.date &&
         (t.date < g.start || (t.endDate || t.until || t.date) > g.end),
     ).length;
-  return `<section class="card"><div class="row"><h2>${esc(g.title)}</h2><span class="tag">${g.status === "active" ? (left < 0 ? "到期后 " + -left + " 天" : left === 0 ? "今天截止" : "剩余 " + left + " 天") : statusNames[g.status]}</span></div><small>${esc(projectName(g.project))} · ${g.start} → ${g.end}</small><p>${esc(g.description)}</p><div class="progress-line"><progress max="100" value="${percent}" aria-label="目标完成度 ${percent}%"></progress><span class="progress-label">${percent}%</span></div><p class="progress-meta">${stats.hasSeries ? "已完成 " + stats.done + "/" + stats.total + " 次安排 · " + stats.taskDone + "/" + stats.taskTotal + " 项任务" : "已完成 " + stats.taskDone + "/" + stats.taskTotal + " 项任务"}</p>${g.status === "active" ? `<p>下一步：${next ? esc(next.t.title) + " · " + next.day : "暂无待办，可补充任务或完成目标"}</p>` : ""}${outside ? `<p class="warning">${outside} 项任务超出目标区间，可在下方重新安排。</p>` : ""}<div class="actions">${button("编辑目标", "goal", g.id)}${button("添加任务", "goal-task", g.id)}${button("删除", "delete", g.id, 'data-kind="goals"')}</div><details><summary>关联任务</summary>${taskList(ts, true)}</details></section>`;
+  const linkedTasks = projectView
+    ? `<div class="goal-task-group"><h3>关联任务 · ${ts.length}</h3>${taskList(ts, true)}</div>`
+    : `<details><summary>关联任务</summary>${taskList(ts, true)}</details>`;
+  return `<section class="card goal-card"><div class="row"><h2>${esc(g.title)}</h2><span class="tag">${g.status === "active" ? (left < 0 ? "到期后 " + -left + " 天" : left === 0 ? "今天截止" : "剩余 " + left + " 天") : statusNames[g.status]}</span></div><small>${esc(projectName(g.project))} · ${g.start} → ${g.end}</small><p>${esc(g.description)}</p><div class="progress-line"><progress max="100" value="${percent}" aria-label="目标完成度 ${percent}%"></progress><span class="progress-label">${percent}%</span></div><p class="progress-meta">${stats.hasSeries ? "已完成 " + stats.done + "/" + stats.total + " 次安排 · " + stats.taskDone + "/" + stats.taskTotal + " 项任务" : "已完成 " + stats.taskDone + "/" + stats.taskTotal + " 项任务"}</p>${!projectView && g.status === "active" ? `<p>下一步：${next ? esc(next.t.title) + " · " + next.day : "暂无待办，可补充任务或完成目标"}</p>` : ""}${outside ? `<p class="warning">${outside} 项任务超出目标区间，可在下方重新安排。</p>` : ""}<div class="actions">${button("编辑目标", "goal", g.id)}${button("添加任务", "goal-task", g.id)}${button("删除", "delete", g.id, 'data-kind="goals"')}</div>${linkedTasks}</section>`;
 }
 function render() {
   updateSaveLabel();
@@ -1035,29 +1098,31 @@ function renderProjects(c) {
         return `<button class="card" style="text-align:left" data-action="open-project" data-id="${p.id}"><h2>${esc(p.title)}</h2><p>${esc(p.description)}</p><small>${stats.taskDone}/${stats.taskTotal} 项任务完成 · ${live(state, "notes", true).filter((n) => noteProjects(n).includes(p.id)).length} 篇笔记</small></button>`;
       })
       .join("") || blank("这里还没有项目")
-  }</div>${
-    p
-      ? `<div class="card"><div class="row"><h2>${esc(p.title)}${p.archived ? "（已归档）" : ""}</h2><div class="actions">${button("编辑", "project", p.id)}${button(p.archived ? "恢复项目" : "归档项目", "archive-project", p.id)}${button("删除", "delete", p.id, 'data-kind="projects"')}</div></div><div class="actions">${button("添加任务", "task")}${button("添加目标", "goal")}${button("新建文档", "note")}${button("添加日程", "event")}</div><h3>任务</h3>${taskList(live(state, "tasks", true).filter((t) => t.project === p.id))}<h3>目标</h3>${
-          live(state, "goals", true)
-            .filter((g) => g.project === p.id)
-            .map(goalCard)
-            .join("") || blank("暂无目标")
-        }<h3>笔记</h3>${
-          live(state, "notes", true)
-            .filter((n) => noteProjects(n).includes(p.id))
-            .map((n) => button(esc(n.title), "open-note", n.id))
-            .join(" ") || blank("暂无笔记")
-        }<h3>日程</h3>${
-          live(state, "events", true)
-            .filter((e) => e.project === p.id)
-            .map(
-              (e) =>
-                `<p>${esc(e.title)} · ${e.date} ${e.start}–${e.end} · ${repeatNames[e.repeat]} ${button("编辑", "event", e.id)}</p>`,
-            )
-            .join("") || blank("暂无日程")
-        }</div>`
-      : ""
-  }`;
+  }</div>${p ? projectDetail(p) : ""}`;
+}
+function projectDetail(p) {
+  const goals = sortProjectRecords(
+      live(state, "goals", true).filter((g) => g.project === p.id),
+      "goals",
+    ),
+    goalIds = new Set(goals.map((goal) => goal.id)),
+    tasks = sortProjectRecords(
+      live(state, "tasks", true).filter(
+        (task) => task.project === p.id && !goalIds.has(task.goal),
+      ),
+      "tasks",
+    ),
+    notes = sortProjectRecords(
+      live(state, "notes", true).filter((note) =>
+        noteProjects(note).includes(p.id),
+      ),
+      "notes",
+    ),
+    events = sortProjectRecords(
+      live(state, "events", true).filter((event) => event.project === p.id),
+      "events",
+    );
+  return `<section class="project-detail"><div class="card project-head"><div class="row"><div><h2>${esc(p.title)}${p.archived ? "（已归档）" : ""}</h2>${p.description ? `<p>${esc(p.description)}</p>` : ""}</div><div class="actions">${button("排列：" + projectSortNames[projectSort], "project-sort")}${button("编辑", "project", p.id)}${button(p.archived ? "恢复项目" : "归档项目", "archive-project", p.id)}${button("删除", "delete", p.id, 'data-kind="projects"')}</div></div><div class="actions">${button("添加目标", "goal", "", 'class="primary"')}${button("添加任务", "task")}${button("新建文档", "note")}${button("添加日程", "event")}</div></div><h2 class="project-section-title">目标 · ${goals.length}</h2><div class="project-goals">${goals.map((goal) => goalCard(goal, true)).join("") || blank("暂无目标")}</div><section class="card project-section"><h2>未关联目标的任务 · ${tasks.length}</h2>${taskList(tasks)}</section><div class="grid project-support"><section class="card project-section"><h2>笔记 · ${notes.length}</h2>${notes.map((note) => `<div class="project-link-row">${button(esc(note.title), "open-note", note.id)}<small>${note.date}</small></div>`).join("") || blank("暂无笔记")}</section><section class="card project-section"><h2>日程 · ${events.length}</h2>${events.map((event) => `<div class="project-link-row"><span><strong>${esc(event.title)}</strong><small>${event.date}${event.endDate && event.endDate !== event.date ? " → " + event.endDate : ""} · ${event.start}–${event.end}</small></span>${button("编辑", "event", event.id)}</div>`).join("") || blank("暂无日程")}</section></div></section>`;
 }
 function goalColor(id) {
   const colors = ["#648bd6", "#4aa58c", "#c68d40", "#b074bd", "#c87878"];
@@ -1785,6 +1850,18 @@ async function route(action, id, b) {
       projectId = "";
       render();
       break;
+    case "project-sort": {
+      const modes = ["timeAsc", "timeDesc", "createdDesc", "createdAsc"],
+        index = modes.indexOf(projectSort);
+      projectSort = modes[(index + 1) % modes.length];
+      try {
+        localStorage.setItem("workspace-project-sort", projectSort);
+      } catch {
+        // The current session still keeps the selected order.
+      }
+      render();
+      break;
+    }
     case "archive-project":
       snapshotUndo("归档状态");
       change(() => {
@@ -2158,6 +2235,9 @@ window.addEventListener("online", () => cloud?.sync());
 async function init() {
   try {
     applyTheme(localStorage.getItem("workspace-theme") || "light");
+    const savedProjectSort = localStorage.getItem("workspace-project-sort");
+    if (Object.hasOwn(projectSortNames, savedProjectSort))
+      projectSort = savedProjectSort;
   } catch {
     applyTheme("light");
   }
