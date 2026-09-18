@@ -8,7 +8,9 @@ import { build } from "esbuild";
 import { JSDOM } from "jsdom";
 import { emptyState, normalize } from "../src/workspace/core.js";
 
-test("actual workspace integrates multi-project editing, preview links, tables, history and sync payload", async () => {
+test("actual workspace integrates multi-project editing, preview links, tables, history and sync payload", async (t) => {
+  // The fixture's countdown assertions are relative to September 18, not the machine clock.
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 8, 18, 12) });
   const html = (
     await readFile(
       new URL("../src/pages/workspace.astro", import.meta.url),

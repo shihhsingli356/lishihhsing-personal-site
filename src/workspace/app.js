@@ -1,5 +1,7 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import { renderTools } from "./tools.js";
+import "./tools.css";
 import "./documents.css";
 import { createFeatures } from "./features.js";
 import { createDocumentTools } from "./document-tools.js";
@@ -1278,6 +1280,7 @@ function render() {
     notes: "笔记",
     ledger: "账本",
     focus: "专注",
+    tools: "工具",
   };
   $("#heading").textContent = headings[view];
   document.querySelectorAll("[data-view]").forEach((b) => {
@@ -1297,6 +1300,7 @@ function render() {
     notes: renderNotes,
     ledger: features.renderLedger,
     focus: features.renderFocus,
+    tools: renderTools,
   })[view](c);
   document.querySelectorAll("details[data-persist-key]").forEach((details) => {
     details.open = openDetails.has(details.dataset.persistKey);

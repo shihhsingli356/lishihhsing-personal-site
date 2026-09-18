@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>工具测试</title>
+  </head>
+  <body>
+    <aside>
+      <strong>LiShihhsing</strong>
+      <nav>
+        <button data-view="today">今天</button
+        ><button data-view="projects">项目</button
+        ><button data-view="calendar">日历</button
+        ><button data-view="notes">笔记</button
+        ><button data-view="ledger">账本</button
+        ><button data-view="focus">专注</button
+        ><button data-view="tools" class="active">工具</button>
+      </nav>
+    </aside>
+    <main>
+      <header class="row"><h1>工具</h1></header>
+      <div id="content"></div>
+    </main>
+    <script type="module">
+      import "/src/workspace/workspace.css";
+      import "/src/workspace/tools.css";
+      import { renderTools } from "/src/workspace/tools.js";
+      renderTools(document.querySelector("#content"));
+    </script>
+  </body>
+</html>
