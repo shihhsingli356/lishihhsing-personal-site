@@ -1031,7 +1031,7 @@ function goalCard(g, projectView = false) {
         (t.date < g.start || (t.endDate || t.until || t.date) > g.end),
     ).length;
   const linkedTasks = projectView
-    ? `<div class="goal-task-group"><h3>关联任务 · ${ts.length}</h3>${taskList(ts, true)}</div>`
+    ? `<details class="goal-task-group"><summary>关联任务 · ${ts.length}</summary>${taskList(ts, true)}</details>`
     : `<details><summary>关联任务</summary>${taskList(ts, true)}</details>`;
   return `<section class="card goal-card"><div class="row"><h2>${esc(g.title)}</h2><span class="tag">${g.status === "active" ? (left < 0 ? "到期后 " + -left + " 天" : left === 0 ? "今天截止" : "剩余 " + left + " 天") : statusNames[g.status]}</span></div><small>${esc(projectName(g.project))} · ${g.start} → ${g.end}</small><p>${esc(g.description)}</p><div class="progress-line"><progress max="100" value="${percent}" aria-label="目标完成度 ${percent}%"></progress><span class="progress-label">${percent}%</span></div><p class="progress-meta">${stats.hasSeries ? "已完成 " + stats.done + "/" + stats.total + " 次安排 · " + stats.taskDone + "/" + stats.taskTotal + " 项任务" : "已完成 " + stats.taskDone + "/" + stats.taskTotal + " 项任务"}</p>${!projectView && g.status === "active" ? `<p>下一步：${next ? esc(next.t.title) + " · " + next.day : "暂无待办，可补充任务或完成目标"}</p>` : ""}${outside ? `<p class="warning">${outside} 项任务超出目标区间，可在下方重新安排。</p>` : ""}<div class="actions">${button("编辑目标", "goal", g.id)}${button("添加任务", "goal-task", g.id)}${button("删除", "delete", g.id, 'data-kind="goals"')}</div>${linkedTasks}</section>`;
 }

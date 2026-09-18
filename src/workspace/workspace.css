@@ -692,10 +692,11 @@ input[type="checkbox"] {
   padding-top: 4px;
   border-top: 1px solid var(--workspace-line);
 }
-.goal-task-group h3 {
+.goal-task-group > summary {
   color: var(--workspace-muted);
   font-size: 13px;
-  margin-bottom: 0;
+  font-weight: 650;
+  padding: 10px 0 4px;
 }
 .project-section {
   margin-top: 20px;

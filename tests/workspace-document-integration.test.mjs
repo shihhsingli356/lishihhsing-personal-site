@@ -190,6 +190,7 @@ test("actual workspace integrates multi-project editing, preview links, tables, 
     assert.ok(
       projectText.indexOf("目标 · 2") < projectText.indexOf("未关联目标的任务"),
     );
+    assert.equal($("details.goal-task-group").open, false);
     assert.equal(projectText.match(/完成项目导航/g)?.length, 1);
     assert.match(projectText, /未分组任务/);
     await click('[data-action="project-sort"]');
