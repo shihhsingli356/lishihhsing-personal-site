@@ -180,6 +180,7 @@ test("actual workspace integrates multi-project editing, preview links, tables, 
         Buffer.from(compiled.outputFiles[0].text).toString("base64")
     );
     await until(() => $("#save-status").textContent.includes("已同步"));
+    assert.equal($(".goal-task-group"), null);
     await click('[data-view="projects"]');
     await click('[data-action="open-project"][data-id="p2"]');
     const projectText = $(".project-detail").textContent;

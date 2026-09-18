@@ -1077,7 +1077,7 @@ function renderToday(c) {
   c.innerHTML = `<form id="quick-form" class="card"><label for="quick">快速记一件事</label><div class="row"><input id="quick" name="title" placeholder="先记下，不必现在决定日期" required style="flex:1;min-width:180px"><button class="primary">记到待安排</button></div></form><div class="row spaced"><strong>${today()}</strong><div class="actions">${button("添加今日任务", "day-task", "", 'data-day="' + today() + '"')}${button("添加日程", "event")}${button("写日记", "diary", "", 'data-day="' + today() + '"')}</div></div><div class="grid"><section><div class="card"><h2>今日任务</h2>${taskList(todayTasks, false, today())}</div><div class="card"><h2>今日安排</h2>${eventList(today())}</div><div class="card"><h2>待安排</h2>${taskList(tasks.filter((t) => !t.date && pending(t)))}</div><details class="card"><summary>需要重新安排 · ${overdue.length} 项</summary>${taskList(overdue)}</details><details class="card"><summary>已搁置 · ${shelved.length} 项</summary>${taskList(shelved)}</details></section><section><h2>进行中的目标</h2>${
     live(state, "goals")
       .filter((g) => g.status === "active")
-      .map(goalCard)
+      .map((goal) => goalCard(goal))
       .join("") || blank("暂时没有进行中的目标")
   }${upcomingTaskPanel()}</section></div>`;
   $("#quick-form").onsubmit = (e) => {
@@ -1191,7 +1191,9 @@ function renderCalendar(c) {
       .filter((n) => n.date === selectedDay)
       .map((n) => button(esc(n.title), "open-note", n.id))
       .join(" ") || '<p class="muted">还没有记录</p>'
-  }</div><h2>目标</h2><div class="grid">${live(state, "goals").map(goalCard).join("")}</div>`;
+  }</div><h2>目标</h2><div class="grid">${live(state, "goals")
+    .map((goal) => goalCard(goal))
+    .join("")}</div>`;
 }
 function flushHistory() {
   if (editingHistory && editingNote) {
