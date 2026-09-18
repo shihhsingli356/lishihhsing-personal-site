@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>文档工具测试</title>
+  </head>
+  <body>
+    <aside>
+      <strong>LiShihhsing</strong>
+      <nav>
+        <button>今天</button><button>项目</button><button>日历</button
+        ><button class="active">笔记</button><button>账本</button
+        ><button>专注</button>
+      </nav>
+      <div class="utilities"><button id="theme">切换明暗</button></div>
+    </aside>
+    <main>
+      <header class="row">
+        <h1>笔记</h1>
+        <span id="saved">测试数据</span>
+      </header>
+      <div id="content"></div>
+    </main>
+    <dialog id="dialog">
+      <form id="form">
+        <div class="row">
+          <h2 id="dialog-title"></h2>
+          <button type="button" data-action="close">关闭</button>
+        </div>
+        <div id="fields"></div>
+        <p id="form-error" role="alert"></p>
+        <footer class="actions">
+          <button type="submit" class="primary" id="submit">保存</button
+          ><button type="button" data-action="close">取消</button>
+        </footer>
+      </form>
+    </dialog>
+    <div id="toast" role="status"></div>
+    <script type="module" src="./documents-preview.js"></script>
+  </body>
+</html>

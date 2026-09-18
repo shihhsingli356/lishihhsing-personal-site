@@ -1,4 +1,10 @@
 import { cleanSegments } from "./activity.js";
+import {
+  cleanTables,
+  noteProjects,
+  noteTags,
+  noteSnapshot,
+} from "./documents.js";
 export const collections = [
   "projects",
   "goals",
@@ -140,7 +146,7 @@ export function taskProgress(task, start, end) {
 }
 export function emptyState() {
   return {
-    version: 2,
+    version: 3,
     projects: [],
     goals: [],
     tasks: [],
@@ -158,7 +164,7 @@ export function normalize(raw) {
   if (
     !raw ||
     typeof raw !== "object" ||
-    (raw.version && raw.version !== 2 && raw.version !== 1)
+    (raw.version && ![1, 2, 3].includes(raw.version))
   )
     throw Error("不支持的备份版本");
   if (
@@ -254,6 +260,11 @@ export function normalize(raw) {
         return {
           ...y,
           project,
+          projects: noteProjects(x).filter((p) => typeof p === "string"),
+          tags: noteTags(Array.isArray(x.tags) ? x.tags.join(",") : ""),
+          status: allowed(x.status, ["draft", "active", "done"], "draft"),
+          createdAt: str(x.createdAt || x.updatedAt || x.date),
+          tables: cleanTables(x.tables || []),
           date: cleanDay(x.date, today()),
           type: allowed(x.type, ["diary", "document"], "document"),
           body: str(x.body),
@@ -270,6 +281,24 @@ export function normalize(raw) {
               title: str(h.title),
               body: str(h.body),
               at: str(h.at),
+              ...(Array.isArray(h.projects)
+                ? { projects: noteProjects(h) }
+                : {}),
+              ...(Array.isArray(h.tags)
+                ? { tags: noteTags(h.tags.join(",")) }
+                : {}),
+              ...(h.status
+                ? {
+                    status: allowed(
+                      h.status,
+                      ["draft", "active", "done"],
+                      "draft",
+                    ),
+                  }
+                : {}),
+              ...(Array.isArray(h.tables)
+                ? { tables: cleanTables(h.tables) }
+                : {}),
             })),
         };
       if (k === "accounts") {
@@ -418,6 +447,10 @@ export function normalize(raw) {
     if (!g) t.goal = "";
     else t.project = g.project;
   }
+  for (const n of s.notes) {
+    n.projects = n.projects.filter((id) => s.projects.some((p) => p.id === id));
+    n.project = n.projects[0] || "";
+  }
   return s;
 }
 export function live(state, collection, includeArchived = false) {
@@ -427,9 +460,16 @@ export function live(state, collection, includeArchived = false) {
       (includeArchived ||
         (collection === "projects"
           ? !x.archived
-          : !state.projects.some(
-              (p) => p.id === x.project && (p.archived || p.deletedAt),
-            ))),
+          : collection === "notes"
+            ? !noteProjects(x).length ||
+              noteProjects(x).some((id) =>
+                state.projects.some(
+                  (p) => p.id === id && !p.archived && !p.deletedAt,
+                ),
+              )
+            : !state.projects.some(
+                (p) => p.id === x.project && (p.archived || p.deletedAt),
+              ))),
   );
 }
 export function occurrences(state, day) {
@@ -532,12 +572,10 @@ export function applyGoal(state, goal, draft, shift = false) {
 export function noteCheckpoint(n) {
   n.history ??= [];
   const last = n.history[0];
-  if (last && last.title === n.title && last.body === n.body) return;
-  n.history.unshift({
-    title: n.title,
-    body: n.body,
-    at: new Date().toISOString(),
-  });
+  const snapshot = noteSnapshot(n);
+  if (last && JSON.stringify(noteSnapshot(last)) === JSON.stringify(snapshot))
+    return;
+  n.history.unshift({ ...snapshot, at: new Date().toISOString() });
   n.history = n.history.slice(0, 30);
 }
 export function importCopy(state, incoming) {
@@ -550,6 +588,25 @@ export function importCopy(state, incoming) {
       x.id = map.get(x.id);
       for (const f of ["project", "goal", "sourceNote", "task"])
         if (f in x) x[f] = map.get(x[f]) || "";
+      if (k === "notes") {
+        const remap = (n) => {
+          if (n.projects)
+            n.projects = n.projects.map((id) => map.get(id)).filter(Boolean);
+          n.body = n.body.replace(
+            /\[\[([^\]|\n]+)(\|[^\]\n]*)?\]\]/g,
+            (all, id, label) =>
+              map.has(id) ? `[[${map.get(id)}${label || ""}]]` : all,
+          );
+          for (const table of n.tables || [])
+            for (const c of table.columns)
+              if (["project", "task"].includes(c.type))
+                for (const row of table.rows)
+                  row.cells[c.id] = map.get(row.cells[c.id]) || "";
+        };
+        remap(x);
+        x.history?.forEach(remap);
+        x.project = x.projects?.[0] || x.project;
+      }
       if (k === "ledger") {
         if (map.has(x.account)) x.account = map.get(x.account);
         if (map.has(x.toAccount)) x.toAccount = map.get(x.toAccount);

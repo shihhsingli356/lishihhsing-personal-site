@@ -31,6 +31,50 @@ test("saved images and body survive backup roundtrip", async () => {
   const restored = await readBackup(backupBlob(state));
   assert.equal(restored.notes[0].body, state.notes[0].body);
 });
+test("multi-project notes, table types, view filters and history survive storage and backup", async () => {
+  const state = samples(),
+    n = state.notes[0];
+  n.projects = state.projects.map((p) => p.id);
+  n.project = n.projects[0];
+  n.tags = ["资料"];
+  n.status = "active";
+  n.tables = [
+    {
+      id: "table-storage",
+      title: "资料",
+      columns: [{ id: "amount", title: "金额", type: "money", options: [] }],
+      rows: [{ id: "r1", cells: { amount: 12.5 } }],
+      view: {
+        column: "amount",
+        operator: "gte",
+        value: "10",
+        query: "",
+        sort: "amount",
+        direction: "desc",
+      },
+    },
+  ];
+  n.history = [
+    {
+      title: n.title,
+      body: n.body,
+      projects: [...n.projects],
+      tags: ["资料"],
+      status: "draft",
+      tables: structuredClone(n.tables),
+      at: "2026-09-18T00:00:00Z",
+    },
+  ];
+  await saveLocal("document-tables", { state, revision: 1 });
+  const stored = (await loadLocal("document-tables")).state,
+    restored = await readBackup(backupBlob(stored));
+  assert.deepEqual(restored.notes[0].tables, n.tables);
+  assert.deepEqual(restored.notes[0].projects, n.projects);
+  assert.equal(
+    restored.notes[0].history[0].tables[0].rows[0].cells.amount,
+    12.5,
+  );
+});
 test("recovery points retain five independent snapshots", async () => {
   const state = samples();
   for (let i = 0; i < 7; i++) {

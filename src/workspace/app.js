@@ -1,6 +1,9 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import "./documents.css";
 import { createFeatures } from "./features.js";
+import { createDocumentTools } from "./document-tools.js";
+import { noteProjects, noteSnapshot, resolveNote } from "./documents.js";
 import { focusStats } from "./activity.js";
 import {
   collections,
@@ -111,6 +114,37 @@ const features = createFeatures({
   projectName,
   download,
   state: () => state,
+});
+const documentTools = createDocumentTools({
+  $,
+  esc,
+  button,
+  field,
+  select,
+  area,
+  modal,
+  save,
+  render,
+  message,
+  download,
+  projectName,
+  markdown,
+  markdownToolbar,
+  diaryTemplateToolbar,
+  newNote,
+  state: () => state,
+  note: () => state.notes.find((n) => n.id === noteId && !n.deletedAt),
+  canEdit: () => !tabConflict,
+  isPreview: () => preview,
+  refreshList: () => {
+    if ($("#note-list")) $("#note-list").innerHTML = noteList();
+  },
+  openProject: (id) => {
+    flushHistory();
+    projectId = id;
+    view = "projects";
+    render();
+  },
 });
 function message(text, canUndo = false) {
   clearTimeout(toastTimer);
@@ -998,7 +1032,7 @@ function renderProjects(c) {
       .map((p) => {
         const ts = live(state, "tasks", true).filter((t) => t.project === p.id),
           stats = taskStats(ts);
-        return `<button class="card" style="text-align:left" data-action="open-project" data-id="${p.id}"><h2>${esc(p.title)}</h2><p>${esc(p.description)}</p><small>${stats.taskDone}/${stats.taskTotal} 项任务完成 · ${live(state, "notes", true).filter((n) => n.project === p.id).length} 篇笔记</small></button>`;
+        return `<button class="card" style="text-align:left" data-action="open-project" data-id="${p.id}"><h2>${esc(p.title)}</h2><p>${esc(p.description)}</p><small>${stats.taskDone}/${stats.taskTotal} 项任务完成 · ${live(state, "notes", true).filter((n) => noteProjects(n).includes(p.id)).length} 篇笔记</small></button>`;
       })
       .join("") || blank("这里还没有项目")
   }</div>${
@@ -1010,7 +1044,7 @@ function renderProjects(c) {
             .join("") || blank("暂无目标")
         }<h3>笔记</h3>${
           live(state, "notes", true)
-            .filter((n) => n.project === p.id)
+            .filter((n) => noteProjects(n).includes(p.id))
             .map((n) => button(esc(n.title), "open-note", n.id))
             .join(" ") || blank("暂无笔记")
         }<h3>日程</h3>${
@@ -1099,13 +1133,15 @@ function flushHistory() {
     const n = state.notes.find((n) => n.id === editingNote);
     if (
       n &&
-      (editingHistory.title !== n.title || editingHistory.body !== n.body)
+      JSON.stringify(noteSnapshot(editingHistory)) !==
+        JSON.stringify(noteSnapshot(n))
     ) {
       n.history ??= [];
       if (
         !n.history.some(
           (h) =>
-            h.title === editingHistory.title && h.body === editingHistory.body,
+            JSON.stringify(noteSnapshot(h)) ===
+            JSON.stringify(noteSnapshot(editingHistory)),
         )
       )
         n.history.unshift(editingHistory);
@@ -1120,8 +1156,7 @@ function startHistory(n) {
   if (editingNote === n.id && editingHistory) return;
   editingNote = n.id;
   editingHistory = {
-    title: n.title,
-    body: n.body,
+    ...noteSnapshot(n),
     at: new Date().toISOString(),
   };
 }
@@ -1149,6 +1184,11 @@ function newNote(type = "document", day = today()) {
     type,
     date: day,
     project: projectId,
+    projects: projectId ? [projectId] : [],
+    tags: [],
+    status: "draft",
+    tables: [],
+    createdAt: new Date().toISOString(),
     body:
       type === "diary"
         ? "## 今天发生了什么\n\n## 心情与感受\n\n## 今日收获\n\n## 明天的一小步\n"
@@ -1166,10 +1206,19 @@ function newNote(type = "document", day = today()) {
 }
 function markdown(text) {
   const html = DOMPurify.sanitize(marked.parse(text, { breaks: true }), {
-    FORBID_TAGS: ["style", "form", "input", "iframe", "video", "audio"],
+    FORBID_TAGS: ["style", "form", "button", "iframe", "video", "audio"],
     FORBID_ATTR: ["style", "srcset"],
+    ALLOW_DATA_ATTR: false,
   });
   const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("input").forEach((input) => {
+    if (input.type === "checkbox" && input.disabled) {
+      const check = doc.createElement("span");
+      check.textContent = input.checked ? "☑ " : "☐ ";
+      check.setAttribute("aria-label", input.checked ? "已完成" : "未完成");
+      input.replaceWith(check);
+    } else input.remove();
+  });
   doc.querySelectorAll("img").forEach((img) => {
     if (
       !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(
@@ -1184,6 +1233,45 @@ function markdown(text) {
     a.setAttribute("target", "_blank");
     a.setAttribute("rel", "noopener noreferrer");
   });
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+  const texts = [];
+  while (walker.nextNode())
+    if (!walker.currentNode.parentElement.closest("code,pre,a,button"))
+      texts.push(walker.currentNode);
+  for (const node of texts) {
+    if (!node.textContent.includes("[[")) continue;
+    const fragment = doc.createDocumentFragment();
+    let offset = 0;
+    for (const match of node.textContent.matchAll(/\[\[([^\]\n]+)\]\]/g)) {
+      fragment.append(
+        doc.createTextNode(node.textContent.slice(offset, match.index)),
+      );
+      const parts = match[1].split("|"),
+        link = {
+          target: parts[0].trim(),
+          label: (parts[1] || parts[0]).trim(),
+        },
+        target = resolveNote(state.notes, link.target);
+      if (target) {
+        const button = doc.createElement("button");
+        button.type = "button";
+        button.dataset.action = "open-note";
+        button.dataset.id = target.id;
+        button.className = "wiki-link";
+        button.textContent = link.label;
+        fragment.append(button);
+      } else {
+        const missing = doc.createElement("span");
+        missing.className = "wiki-missing";
+        missing.title = "文档不存在";
+        missing.textContent = link.label;
+        fragment.append(missing);
+      }
+      offset = match.index + match[0].length;
+    }
+    fragment.append(doc.createTextNode(node.textContent.slice(offset)));
+    node.replaceWith(fragment);
+  }
   return doc.body.innerHTML;
 }
 function selectedNoteText() {
@@ -1383,10 +1471,10 @@ function markdownFormat(kind) {
   body.setSelectionRange(nextStart, nextEnd);
   n.title = $("#note-title").value;
   n.body = body.value;
-  n.project = $("#note-project").value;
   n.updatedAt = new Date().toISOString();
   save();
   $("#note-list").innerHTML = noteList();
+  documentTools.refreshOutline();
 }
 function noteList() {
   return (
@@ -1399,11 +1487,31 @@ function noteList() {
             (b.updatedAt || b.date).localeCompare(a.updatedAt || a.date),
       )
       .filter((n) =>
-        (n.title + " " + n.body).toLowerCase().includes(search.toLowerCase()),
+        [
+          n.title,
+          n.body,
+          ...(n.tags || []),
+          ...noteProjects(n).map(projectName),
+          ...(n.tables || []).flatMap((t) => [
+            t.title,
+            ...t.columns.map((c) => c.title),
+            ...t.rows.flatMap((r) => Object.values(r.cells)),
+          ]),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(search.toLowerCase()),
       )
       .map(
         (n) =>
-          `<button class="note-item ${n.id === noteId ? "active" : ""}" data-action="open-note" data-id="${n.id}"><strong>${n.pinned && n.type === "document" ? "置顶 · " : ""}${esc(n.title)}</strong><br><small>${n.type === "diary" ? "日记" : "文档"} · ${n.date}<br>${esc(projectName(n.project))}</small></button>`,
+          `<button class="note-item ${n.id === noteId ? "active" : ""}" data-action="open-note" data-id="${n.id}"><strong>${n.pinned && n.type === "document" ? "置顶 · " : ""}${esc(n.title)}</strong><br><small>${n.type === "diary" ? "日记" : "文档"} · ${n.date}<br>${esc(noteProjects(n).slice(0, 2).map(projectName).join(" · "))}${noteProjects(n).length > 2 ? ` +${noteProjects(n).length - 2}` : ""}</small>${
+            (n.tags || []).length
+              ? `<div class="note-list-tags">${n.tags
+                  .slice(0, 3)
+                  .map((t) => `<span class="note-tag">#${esc(t)}</span>`)
+                  .join("")}</div>`
+              : ""
+          }</button>`,
       )
       .join("") || blank("没有匹配的笔记")
   );
@@ -1473,7 +1581,6 @@ function renderNotes(c) {
         noteCheckpoint(n);
       n.title = $("#note-title").value;
       n.body = $("#note-body").value;
-      n.project = $("#note-project").value;
       n.updatedAt = new Date().toISOString();
       save();
       $("#note-list").innerHTML = noteList();
@@ -1482,16 +1589,13 @@ function renderNotes(c) {
       $("#note-body").oninput =
       $("#note-project").onchange =
         update;
+    documentTools.enhance(n, preview);
   }
 }
 function history(id) {
   const n = state.notes.find((n) => n.id === id);
   flushHistory();
-  modal(
-    "版本历史 · " + n.title,
-    `${n.history?.map((h, i) => `<details><summary>${esc(h.at.replace("T", " ").slice(0, 19))} · ${esc(h.title)}</summary><div class="history-body">${esc(h.body)}</div>${button("恢复此版本", "restore-version", id, `data-index="${i}"`)}</details>`).join("") || blank("还没有旧版本")}`,
-    null,
-  );
+  modal("版本历史 · " + n.title, documentTools.historyHTML(n), null);
 }
 function imageInsert() {
   const n = state.notes.find((n) => n.id === noteId);
@@ -1654,6 +1758,7 @@ async function syncConflict() {
   );
 }
 async function route(action, id, b) {
+  if (await documentTools.route(action, id, b)) return;
   if (await features.route(action, id, b)) return;
   switch (action) {
     case "close":
@@ -1825,39 +1930,6 @@ async function route(action, id, b) {
     case "diary-date":
       newNote("diary", $("#diary-date").value || today());
       break;
-    case "doc-template":
-      modal(
-        "文档模板",
-        select("模板", "template", [
-          ["blank", "空白文档"],
-          ["knowledge", "知识整理"],
-          ["project", "项目方案"],
-          ["reading", "阅读笔记"],
-        ]),
-        async (v) => {
-          const templates = {
-            blank: ["未命名文档", ""],
-            knowledge: [
-              "知识整理",
-              "## 核心概念\n\n## 要点\n\n## 示例\n\n## 参考资料\n",
-            ],
-            project: [
-              "项目方案",
-              "## 目标\n\n## 方案\n\n## 里程碑\n\n## 待解决问题\n",
-            ],
-            reading: [
-              "阅读笔记",
-              "## 来源\n\n## 核心观点\n\n## 我的理解\n\n## 下一步行动\n",
-            ],
-          };
-          newNote();
-          const n = state.notes.find((n) => n.id === noteId);
-          [n.title, n.body] = templates[v.template] || templates.blank;
-          await save();
-        },
-        "创建文档",
-      );
-      break;
     case "preview":
       flushHistory();
       preview = !preview;
@@ -1876,7 +1948,7 @@ async function route(action, id, b) {
       }
       editTask("", {
         title: selection.slice(0, 300),
-        project: n.project,
+        project: noteProjects(n).length === 1 ? noteProjects(n)[0] : "",
         sourceNote: n.id,
       });
       break;
@@ -1900,6 +1972,13 @@ async function route(action, id, b) {
       noteCheckpoint(n);
       n.title = h.title;
       n.body = h.body;
+      for (const key of ["projects", "tags", "status", "tables"])
+        if (key in h) n[key] = structuredClone(h[key]);
+      n.projects = noteProjects(n).filter((id) =>
+        state.projects.some((p) => p.id === id),
+      );
+      n.project = n.projects[0] || "";
+      n.updatedAt = new Date().toISOString();
       await save();
       close();
       render();
