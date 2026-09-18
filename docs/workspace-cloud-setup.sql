@@ -1,5 +1,5 @@
--- Optional future setup; NOT applied to a remote project in this iteration.
--- Run in the intended Supabase project's SQL editor after selecting that project.
+-- Applied to the LiShihhsing Supabase project on 2026-09-18.
+-- Kept here as the reproducible database definition for the private workspace.
 begin;
 create table if not exists public.personal_workspace (
   user_id uuid primary key references auth.users(id) on delete cascade,

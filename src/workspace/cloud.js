@@ -1,6 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
-
-// Optional adapter. It remains dormant until the owner configures a project and logs in.
 // The database RPC uses an expected version; stale clients never overwrite silently.
 export class CloudSync {
   constructor(callbacks) {
@@ -18,25 +15,10 @@ export class CloudSync {
     this.status = text;
     this.callbacks.status();
   }
-  async connect({ url, key, email, password, mode }) {
-    this.namespace = new URL(url).hostname;
-    this.client = createClient(url, key, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: true,
-        detectSessionInUrl: false,
-      },
-    });
-    const { data, error } =
-      mode === "signup"
-        ? await this.client.auth.signUp({ email, password })
-        : await this.client.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    if (!data.session) {
-      this.callbacks.notify("注册已提交，请按邮件提示验证后登录");
-      return;
-    }
-    this.user = data.user;
+  async attach({ client, user, namespace }) {
+    this.client = client;
+    this.user = user;
+    this.namespace = namespace;
     const local = await this.callbacks.switchUser(this.user, this.namespace);
     this.dirty = !!local?.dirty;
     await this.sync();
@@ -150,12 +132,10 @@ export class CloudSync {
     if (error) throw error;
     this.user = null;
     this.conflict = null;
-    await this.callbacks.switchUser(null, this.namespace);
-    this.statusChanged("已退出，返回本地工作区");
+    this.statusChanged("已退出");
   }
   dispose() {
     clearTimeout(this.timer);
     clearInterval(this.interval);
-    this.client?.auth.stopAutoRefresh();
   }
 }

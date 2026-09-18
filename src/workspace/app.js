@@ -26,11 +26,8 @@ import {
   taskProgress,
   noteCheckpoint,
   importCopy,
-  samples,
 } from "./core.js";
 import {
-  getRecord,
-  putRecord,
   loadLocal,
   saveLocal,
   recoveryPoint,
@@ -1518,42 +1515,12 @@ async function settings() {
   flushHistory();
   modal(
     "账号与备份",
-    `<section><h3>保存状态</h3><p>${esc($("#save-status").textContent)}</p><p class="muted">本机保存使用浏览器数据库。清理站点数据会移除本机记录，请定期导出备份。未登录时，本机使用者可打开这些记录。</p><div class="actions">${button("导出备份", "export")}${button("导入备份", "import")}${button("创建恢复点", "checkpoint")}${button("查看恢复点", "recoveries")}${undo.length ? button("撤销上一步", "undo") : ""}</div></section><section><h3>账号与云同步</h3><p>按你的选择，本次先使用本地模式；云同步稍后配置。</p><p class="muted">云端连接后，各账号使用独立工作区。本地草稿不会自动上传，可通过备份导入到登录后的工作区。</p>${cloud?.user ? `<p>已登录：${esc(cloud.user.email)}</p><div class="actions">${button("立即同步", "sync")}${button("退出登录", "logout")}</div>` : button("配置 / 登录云端", "cloud-settings")}</section>`,
+    `<section><h3>保存与备份</h3><p>${esc($("#save-status").textContent)}</p><div class="actions">${button("立即同步", "sync")}${button("导出备份", "export")}${button("导入备份", "import")}${button("创建恢复点", "checkpoint")}${button("查看恢复点", "recoveries")}${undo.length ? button("撤销上一步", "undo") : ""}</div></section><section><h3>当前账号</h3><p>${esc(cloud?.user?.email || "")}</p><div class="actions">${button("退出登录", "logout")}</div></section>`,
     null,
   );
 }
-async function cloudSettings() {
-  const config = (await getRecord("cloud-config")) || {};
-  modal(
-    "云端配置与登录",
-    `<p class="muted">此功能等待后续接入。需要可用的 Supabase 项目和工作区数据表；只填写公开访问密钥。内容按账号隔离，不公开展示。</p>` +
-      field("Supabase Project URL", "url", config.url, "url", true) +
-      field("Publishable key（公开密钥）", "key", config.key, "text", true) +
-      field("邮箱", "email", "", "email", true) +
-      field("密码", "password", "", "password", true) +
-      select("操作", "mode", [
-        ["login", "登录已有账号"],
-        ["signup", "注册账号"],
-      ]),
-    async (v) => {
-      if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(v.url))
-        throw Error("请填写 Supabase 官方项目 URL");
-      if (!v.key.startsWith("sb_publishable_"))
-        throw Error("请使用 sb_publishable_ 开头的公开密钥");
-      if (v.password.length < 8) throw Error("密码至少 8 位");
-      await saveQueue;
-      await putRecord("cloud-config", {
-        url: v.url.replace(/\/$/, ""),
-        key: v.key,
-      });
-      await connectCloud(v);
-    },
-    "连接并登录",
-  );
-}
-async function connectCloud(credentials) {
+async function connectCloud(context) {
   const { CloudSync } = await import("./cloud.js");
-  if (cloud?.user) throw Error("请先退出当前账号");
   cloud?.dispose?.();
   cloud = new CloudSync({
     get: () => ({ state: structuredClone(state), revision, baseRemote }),
@@ -1584,8 +1551,16 @@ async function connectCloud(credentials) {
       await saveQueue;
       flushHistory();
       await saveQueue;
-      scope = user ? "cloud:" + namespace + ":" + user.id : "local";
-      const env = await loadLocal(scope);
+      scope = "cloud:" + namespace + ":" + user.id;
+      let env = await loadLocal(scope);
+      if (!env) {
+        const legacy = await loadLocal("local");
+        if (legacy) {
+          env = { ...legacy, baseRemote: 0, dirty: true };
+          await saveLocal(scope, env);
+          message("原有本机内容已迁入当前账号");
+        }
+      }
       state = env?.state || emptyState();
       revision = env?.revision || 0;
       savedRevision = revision;
@@ -1594,12 +1569,14 @@ async function connectCloud(credentials) {
       projectId = "";
       undo = [];
       view = "today";
+      noteId = live(state, "notes", true)[0]?.id || "";
+      noteKind = state.notes.find((n) => n.id === noteId)?.type || "document";
       render();
       return env;
     },
     notify: message,
   });
-  await cloud.connect(credentials);
+  await cloud.attach(context);
 }
 async function syncConflict() {
   if (!cloud?.conflict) return;
@@ -1864,17 +1841,13 @@ async function route(action, id, b) {
     case "settings":
       await settings();
       break;
-    case "cloud-settings":
-      await cloudSettings();
-      break;
     case "sync":
       await cloud?.sync();
       message(cloud?.status || "尚未连接");
       break;
     case "logout":
       await cloud?.logout();
-      close();
-      render();
+      location.reload();
       break;
     case "sync-conflict":
       await syncConflict();
@@ -2038,25 +2011,8 @@ async function init() {
     applyTheme("light");
   }
   try {
-    const saved = await loadLocal("local");
-    if (saved) {
-      state = saved.state;
-      revision = saved.revision || 0;
-      savedRevision = revision;
-    } else {
-      const old = localStorage.getItem("lishihhsing-workspace-draft-v1");
-      state = old ? normalize(JSON.parse(old)) : samples();
-      await saveLocal("local", {
-        state,
-        revision: 0,
-        baseRemote: 0,
-        dirty: false,
-      });
-      if (old) message("原草稿已升级，旧数据仍保留");
-    }
-    noteId = live(state, "notes", true)[0]?.id || "";
-    noteKind = state.notes.find((n) => n.id === noteId)?.type || "document";
-    render();
+    if (!window.__workspaceAuth?.user) throw Error("登录状态无效，请重新登录");
+    await connectCloud(window.__workspaceAuth);
   } catch (error) {
     persistError = true;
     setSaveLabel("本地数据读取失败");
