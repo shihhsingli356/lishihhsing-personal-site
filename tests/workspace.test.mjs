@@ -307,3 +307,44 @@ test("invalid task ranges and repeats are rejected", () => {
     }),
   );
 });
+
+test("accounts, foreign currency and investments survive normalization", () => {
+  const state = normalize({
+    version: 2,
+    projects: [],
+    goals: [],
+    tasks: [],
+    notes: [],
+    events: [],
+    accounts: [
+      {
+        id: "usd-savings",
+        title: "美元存款",
+        type: "savings",
+        currency: "USD",
+        openingCents: 120000,
+        rate: 7.1,
+      },
+    ],
+    ledger: [
+      {
+        id: "buy-index",
+        title: "买入指数基金",
+        kind: "investment_buy",
+        date: "2026-09-18",
+        cents: 50000,
+        currency: "USD",
+        rate: 7.1,
+        account: "usd-savings",
+        asset: "VOO",
+        quantity: 1.25,
+      },
+    ],
+  });
+  assert.equal(state.accounts[0].currency, "USD");
+  assert.equal(state.accounts[0].openingCents, 120000);
+  assert.equal(state.ledger[0].kind, "investment_buy");
+  assert.equal(state.ledger[0].rate, 7.1);
+  assert.equal(state.ledger[0].asset, "VOO");
+  assert.equal(state.ledger[0].quantity, 1.25);
+});

@@ -52,6 +52,39 @@ export function createFeatures(ctx) {
     "退款",
     "其他",
   ];
+  const currencies = [
+    ["CNY", "人民币 CNY"],
+    ["USD", "美元 USD"],
+    ["HKD", "港币 HKD"],
+    ["EUR", "欧元 EUR"],
+    ["JPY", "日元 JPY"],
+    ["GBP", "英镑 GBP"],
+  ];
+  const currencySymbols = {
+    CNY: "¥",
+    USD: "$",
+    HKD: "HK$",
+    EUR: "€",
+    JPY: "JP¥",
+    GBP: "£",
+  };
+  const accountTypes = [
+    ["bank", "银行卡"],
+    ["savings", "存款"],
+    ["cash", "现金"],
+    ["ewallet", "电子钱包"],
+    ["credit", "信用账户"],
+    ["investment", "投资账户"],
+  ];
+  const ledgerKinds = [
+    ["expense", "支出"],
+    ["income", "收入"],
+    ["transfer", "转账"],
+    ["investment_buy", "买入投资"],
+    ["investment_sell", "卖出投资"],
+  ];
+  const kindName = Object.fromEntries(ledgerKinds);
+  const accountTypeName = Object.fromEntries(accountTypes);
   const current = () => ctx.state();
   const focusRecords = () => current().focus.filter((r) => !r.deletedAt);
   const draftSegments = (now = Date.now()) => {
@@ -103,61 +136,166 @@ export function createFeatures(ctx) {
         .join("")}</select></label>
       <button class="primary">查看</button></form><p id="range-error" role="alert" class="warning"></p>`;
   }
+  const baseCents = (record) =>
+    Math.round(record.cents * Number(record.rate || 1));
+  const originalMoney = (record) =>
+    `${currencySymbols[record.currency || "CNY"] || record.currency} ${money(record.cents)}`;
+  const activeAccounts = () =>
+    current().accounts.filter((account) => !account.deletedAt);
+  const accountName = (id) =>
+    current().accounts.find((account) => account.id === id)?.title ||
+    id ||
+    "未指定账户";
+  function accountBalances(cutoff) {
+    const balances = new Map(
+      activeAccounts().map((account) => [
+        account.id,
+        Math.round(account.openingCents * Number(account.rate || 1)),
+      ]),
+    );
+    current()
+      .ledger.filter((record) => !record.deletedAt && record.date <= cutoff)
+      .forEach((record) => {
+        const value = baseCents(record);
+        if (
+          balances.has(record.account) &&
+          (record.kind === "income" || record.kind === "investment_sell")
+        )
+          balances.set(
+            record.account,
+            (balances.get(record.account) || 0) + value,
+          );
+        if (
+          balances.has(record.account) &&
+          (record.kind === "expense" || record.kind === "investment_buy")
+        )
+          balances.set(
+            record.account,
+            (balances.get(record.account) || 0) - value,
+          );
+        if (record.kind === "transfer") {
+          if (balances.has(record.account))
+            balances.set(record.account, balances.get(record.account) - value);
+          if (balances.has(record.toAccount))
+            balances.set(
+              record.toAccount,
+              balances.get(record.toAccount) + value,
+            );
+        }
+      });
+    return balances;
+  }
+  function investmentHoldings(cutoff) {
+    const holdings = new Map();
+    current()
+      .ledger.filter(
+        (record) =>
+          !record.deletedAt &&
+          record.date <= cutoff &&
+          ["investment_buy", "investment_sell"].includes(record.kind) &&
+          record.asset,
+      )
+      .forEach((record) => {
+        const holding = holdings.get(record.asset) || {
+          quantity: 0,
+          invested: 0,
+        };
+        const direction = record.kind === "investment_buy" ? 1 : -1;
+        holding.quantity += direction * Number(record.quantity || 0);
+        holding.invested += direction * baseCents(record);
+        holdings.set(record.asset, holding);
+      });
+    return holdings;
+  }
   function renderLedger(c) {
     const all = current().ledger.filter(
-      (r) => !r.deletedAt && r.date.startsWith(ledgerMonth),
+      (record) => !record.deletedAt && record.date.startsWith(ledgerMonth),
     );
     const rows = all
       .filter(
-        (r) =>
-          (ledgerKind === "all" || r.kind === ledgerKind) &&
-          (!ledgerCategory || r.category === ledgerCategory) &&
+        (record) =>
+          (ledgerKind === "all" || record.kind === ledgerKind) &&
+          (!ledgerCategory || record.category === ledgerCategory) &&
           (!ledgerQuery ||
-            (r.title + r.memo + r.account)
+            [
+              record.title,
+              record.memo,
+              accountName(record.account),
+              record.asset,
+            ]
+              .join(" ")
               .toLowerCase()
               .includes(ledgerQuery.toLowerCase())),
       )
       .sort((a, b) => b.date.localeCompare(a.date));
     const income = all
-        .filter((r) => r.kind === "income")
-        .reduce((s, r) => s + r.cents, 0),
+        .filter((record) => record.kind === "income")
+        .reduce((sum, record) => sum + baseCents(record), 0),
       expense = all
-        .filter((r) => r.kind === "expense")
-        .reduce((s, r) => s + r.cents, 0);
+        .filter((record) => record.kind === "expense")
+        .reduce((sum, record) => sum + baseCents(record), 0);
     const budget = current().budgets.find(
-      (r) => !r.deletedAt && r.month === ledgerMonth,
+      (record) => !record.deletedAt && record.month === ledgerMonth,
     );
     const groups = new Map();
     all
-      .filter((r) => r.kind === "expense")
-      .forEach((r) =>
-        groups.set(r.category, (groups.get(r.category) || 0) + r.cents),
+      .filter((record) => record.kind === "expense")
+      .forEach((record) =>
+        groups.set(
+          record.category,
+          (groups.get(record.category) || 0) + baseCents(record),
+        ),
       );
-    c.innerHTML = `<div class="row spaced"><h2>月度收支</h2><div class="actions">${button("记一笔", "ledger-edit", "", 'class="primary"')}${button("月预算", "ledger-budget")}${button("导出明细", "ledger-export")}</div></div>
-      <form id="ledger-filter" class="filter-bar"><label>月份<input type="month" name="month" value="${ledgerMonth}" required></label><label>收支<select name="kind">${[
-        ["all", "全部"],
-        ["expense", "支出"],
-        ["income", "收入"],
-      ]
-        .map(
-          ([v, l]) =>
-            `<option value="${v}" ${ledgerKind === v ? "selected" : ""}>${l}</option>`,
-        )
-        .join(
-          "",
-        )}</select></label><label>分类<select name="category"><option value="">全部分类</option>${[...new Set([...categories, ...all.map((r) => r.category)])].map((x) => `<option ${ledgerCategory === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label><label>搜索<input name="query" value="${esc(ledgerQuery)}" placeholder="名称、备注或账户"></label><button>筛选</button></form>
-      <div class="metrics"><div><small>收入</small><strong>¥ ${money(income)}</strong></div><div><small>支出</small><strong>¥ ${money(expense)}</strong></div><div><small>结余</small><strong>¥ ${money(income - expense)}</strong></div><div><small>${budget ? (expense > budget.cents ? "超出预算" : "预算剩余") : "月预算"}</small><strong>${budget ? "¥ " + money(Math.abs(budget.cents - expense)) : "未设置"}</strong></div></div>
-      ${budget ? `<div class="card"><div class="row"><span>预算 ¥ ${money(budget.cents)}</span><span>${Math.round((expense / budget.cents) * 100)}% 已使用</span></div><progress max="${budget.cents}" value="${Math.min(expense, budget.cents)}"></progress></div>` : ""}
-      <div class="grid"><section class="card"><h2>支出分类</h2>${
+    const balances = accountBalances(ledgerMonth + "-31"),
+      deposits = [...balances.values()].reduce((sum, value) => sum + value, 0),
+      holdings = investmentHoldings(ledgerMonth + "-31"),
+      invested = [...holdings.values()].reduce(
+        (sum, holding) => sum + holding.invested,
+        0,
+      );
+    c.innerHTML = `<div class="row spaced"><h2>资产与收支</h2><div class="actions">${button("记一笔", "ledger-edit", "", 'class="primary"')}${button("账户", "ledger-accounts")}${button("月预算", "ledger-budget")}${button("导出", "ledger-export")}</div></div>
+      <form id="ledger-filter" class="filter-bar"><label>月份<input type="month" name="month" value="${ledgerMonth}" required></label><label>类型<select name="kind">${[["all", "全部"], ...ledgerKinds].map(([value, label]) => `<option value="${value}" ${ledgerKind === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label>分类<select name="category"><option value="">全部分类</option>${[...new Set([...categories, ...all.map((record) => record.category)])].map((category) => `<option ${ledgerCategory === category ? "selected" : ""}>${esc(category)}</option>`).join("")}</select></label><label>搜索<input name="query" value="${esc(ledgerQuery)}" placeholder="名称、账户或投资标的"></label><button>筛选</button></form>
+      <div class="metrics ledger-metrics"><div><small>收入</small><strong>¥ ${money(income)}</strong></div><div><small>支出</small><strong>¥ ${money(expense)}</strong></div><div><small>净收支</small><strong>¥ ${money(income - expense)}</strong></div><div><small>账户资产</small><strong>¥ ${money(deposits)}</strong></div><div><small>投资净额</small><strong>¥ ${money(invested)}</strong></div><div><small>${budget ? (expense > budget.cents ? "超出预算" : "预算剩余") : "月预算"}</small><strong>${budget ? "¥ " + money(Math.abs(budget.cents - expense)) : "未设置"}</strong></div></div>
+      ${budget ? `<div class="card budget-card"><div class="row"><span>预算 ¥ ${money(budget.cents)}</span><span>${Math.round((expense / budget.cents) * 100)}%</span></div><progress max="${budget.cents}" value="${Math.min(expense, budget.cents)}"></progress></div>` : ""}
+      <div class="grid ledger-grid"><section class="card"><h2>账户</h2>${
+        activeAccounts()
+          .map((account) => {
+            const base = balances.get(account.id) || 0;
+            const native = Math.round(base / Number(account.rate || 1));
+            return `<div class="account-row"><div><strong>${esc(account.title)}</strong><small>${esc(accountTypeName[account.type] || "账户")} · ${account.currency}</small></div><strong>${currencySymbols[account.currency] || account.currency} ${money(native)}</strong></div>`;
+          })
+          .join("") || '<div class="empty">还没有账户</div>'
+      }</section><section class="card"><h2>投资</h2>${
+        [...holdings]
+          .filter(([, holding]) => holding.quantity || holding.invested)
+          .map(
+            ([asset, holding]) =>
+              `<div class="account-row"><div><strong>${esc(asset)}</strong><small>${holding.quantity.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 份</small></div><strong>¥ ${money(holding.invested)}</strong></div>`,
+          )
+          .join("") || '<div class="empty">还没有投资记录</div>'
+      }</section></div>
+      <div class="grid ledger-grid"><section class="card"><h2>支出分类</h2>${
         [...groups]
           .sort((a, b) => b[1] - a[1])
           .map(
             ([name, cents]) =>
               `<div class="category-row"><span>${esc(name)}</span><progress max="${Math.max(expense, 1)}" value="${cents}" aria-label="${esc(name)}支出占比"></progress><strong>¥ ${money(cents)}</strong></div>`,
           )
-          .join("") || '<p class="muted">本月暂无支出</p>'
-      }</section><section class="card"><h2>本月概览</h2><p>已记录 ${all.length} 笔 · ${new Set(all.map((r) => r.date)).size} 天</p><p>单笔平均支出 ¥ ${money(Math.round(expense / Math.max(1, all.filter((r) => r.kind === "expense").length)))}</p></section></div>
-      <section class="card"><h2>收支明细 · ${rows.length} 笔</h2>${rows.map((r) => `<div class="ledger-row"><div><strong>${esc(r.title)}</strong><small>${r.date} · ${esc(r.category)} · ${esc(r.account)}${r.project ? " · " + esc(ctx.projectName(r.project)) : ""}</small>${r.memo ? `<small>${esc(r.memo)}</small>` : ""}</div><strong class="${r.kind === "income" ? "income" : "expense"}">${r.kind === "income" ? "+" : "−"} ¥ ${money(r.cents)}</strong><div class="actions">${button("编辑", "ledger-edit", r.id)}${button("删除", "delete", r.id, 'data-kind="ledger"')}</div></div>`).join("") || '<p class="muted">暂无匹配账目</p>'}</section>`;
+          .join("") || '<div class="empty">本月暂无支出</div>'
+      }</section><section class="card"><h2>本月记录</h2><div class="ledger-summary"><strong>${all.length}</strong><span>笔记录</span><strong>${new Set(all.map((record) => record.date)).size}</strong><span>个记账日</span></div></section></div>
+      <section class="card"><h2>明细 · ${rows.length} 笔</h2>${
+        rows
+          .map((record) => {
+            const converted = baseCents(record);
+            const sign = ["income", "investment_sell"].includes(record.kind)
+              ? "+"
+              : record.kind === "transfer"
+                ? ""
+                : "−";
+            return `<div class="ledger-row"><div><strong>${esc(record.title)}</strong><small>${record.date} · ${esc(kindName[record.kind] || "账目")} · ${esc(accountName(record.account))}${record.toAccount ? " → " + esc(accountName(record.toAccount)) : ""}${record.asset ? " · " + esc(record.asset) : ""}</small>${record.memo ? `<small>${esc(record.memo)}</small>` : ""}</div><div class="ledger-amount"><strong class="${record.kind === "income" ? "income" : "expense"}">${sign}${originalMoney(record)}</strong>${record.currency !== "CNY" ? `<small>≈ ¥ ${money(converted)}</small>` : ""}</div><div class="actions">${button("编辑", "ledger-edit", record.id)}${button("删除", "delete", record.id, 'data-kind="ledger"')}</div></div>`;
+          })
+          .join("") || '<div class="empty">暂无匹配账目</div>'
+      }</section>`;
     $("#ledger-filter").onsubmit = (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
@@ -170,26 +308,25 @@ export function createFeatures(ctx) {
     };
   }
   function editLedger(id) {
-    const r = current().ledger.find((r) => r.id === id);
+    const r = current().ledger.find((record) => record.id === id),
+      accounts = activeAccounts(),
+      accountOptions = [
+        ["", "未指定账户"],
+        ...accounts.map((account) => [account.id, account.title]),
+      ];
     modal(
       r ? "编辑账目" : "记一笔",
-      select(
-        "收支类型",
-        "kind",
-        [
-          ["expense", "支出"],
-          ["income", "收入"],
-        ],
-        r?.kind || "expense",
-      ) +
+      select("类型", "kind", ledgerKinds, r?.kind || "expense") +
         field("名称", "title", r?.title, "text", true) +
         field(
-          "金额（元）",
+          "金额",
           "amount",
           r ? (r.cents / 100).toFixed(2) : "",
           "text",
           true,
         ) +
+        select("币种", "currency", currencies, r?.currency || "CNY") +
+        field("兑人民币汇率", "rate", r?.rate || 1, "number", true) +
         field("日期", "date", r?.date || today(), "date", true) +
         select(
           "分类",
@@ -199,7 +336,10 @@ export function createFeatures(ctx) {
           ),
           r?.category || "餐饮",
         ) +
-        field("账户", "account", r?.account || "默认账户") +
+        select("账户", "account", accountOptions, r?.account || "") +
+        select("转入账户", "toAccount", accountOptions, r?.toAccount || "") +
+        field("投资标的", "asset", r?.asset || "") +
+        field("数量", "quantity", r?.quantity || "", "number") +
         projectField(r?.project || "") +
         area("备注", "memo", r?.memo),
       async (v) => {
@@ -209,13 +349,32 @@ export function createFeatures(ctx) {
           title: v.title.trim(),
           cents: moneyCents(v.amount),
           kind: v.kind,
+          currency: v.currency,
+          rate: Number(v.rate),
           date: v.date,
-          category: v.category,
-          account: v.account.trim() || "默认账户",
+          category:
+            v.kind === "expense" || v.kind === "income" ? v.category : "",
+          account: v.account,
+          toAccount: v.kind === "transfer" ? v.toAccount : "",
+          asset: v.kind.startsWith("investment_") ? v.asset.trim() : "",
+          quantity: v.kind.startsWith("investment_") ? Number(v.quantity) : 0,
           project: v.project,
           memo: v.memo,
           updatedAt: new Date().toISOString(),
         };
+        if (!Number.isFinite(entry.rate) || entry.rate <= 0)
+          throw Error("请填写有效汇率");
+        if (entry.kind === "transfer" && (!entry.account || !entry.toAccount))
+          throw Error("请选择转出和转入账户");
+        if (entry.kind === "transfer" && entry.account === entry.toAccount)
+          throw Error("转出和转入账户不能相同");
+        if (
+          entry.kind.startsWith("investment_") &&
+          (!entry.asset ||
+            !Number.isFinite(entry.quantity) ||
+            entry.quantity <= 0)
+        )
+          throw Error("请填写投资标的和数量");
         if (r) Object.assign(r, entry);
         else current().ledger.push({ id: uid(), ...entry });
         ledgerMonth = v.date.slice(0, 7);
@@ -223,6 +382,82 @@ export function createFeatures(ctx) {
       },
     );
     $("#f-amount").inputMode = "decimal";
+    $("#f-rate").step = "any";
+    $("#f-quantity").step = "any";
+    const toggleFields = () => {
+      const kind = $("#f-kind").value,
+        transfer = kind === "transfer",
+        investment = kind.startsWith("investment_");
+      $("#f-toAccount").closest(".field").hidden = !transfer;
+      $("#f-asset").closest(".field").hidden = !investment;
+      $("#f-quantity").closest(".field").hidden = !investment;
+      $("#f-category").closest(".field").hidden = transfer || investment;
+    };
+    $("#f-kind").onchange = toggleFields;
+    $("#f-account").onchange = () => {
+      const account = accounts.find(
+        (item) => item.id === $("#f-account").value,
+      );
+      if (!account) return;
+      $("#f-currency").value = account.currency;
+      $("#f-rate").value = account.rate || 1;
+    };
+    toggleFields();
+  }
+  function accountDialog(id = "") {
+    const account = current().accounts.find((item) => item.id === id);
+    modal(
+      account ? "编辑账户" : "新建账户",
+      field("账户名称", "title", account?.title, "text", true) +
+        select("账户类型", "type", accountTypes, account?.type || "bank") +
+        select("币种", "currency", currencies, account?.currency || "CNY") +
+        field(
+          "初始余额",
+          "opening",
+          account ? (account.openingCents / 100).toFixed(2) : "0.00",
+          "text",
+          true,
+        ) +
+        field("兑人民币汇率", "rate", account?.rate || 1, "number", true),
+      async (values) => {
+        if (!values.title.trim()) throw Error("请填写账户名称");
+        if (!/^-?\d{1,9}(\.\d{1,2})?$/.test(values.opening))
+          throw Error("初始余额格式无效");
+        const sign = values.opening.startsWith("-") ? -1 : 1,
+          [whole, fraction = ""] = values.opening.replace("-", "").split("."),
+          openingCents =
+            sign * (Number(whole) * 100 + Number(fraction.padEnd(2, "0")));
+        const next = {
+          title: values.title.trim(),
+          type: values.type,
+          currency: values.currency,
+          openingCents,
+          rate: Number(values.rate),
+          updatedAt: new Date().toISOString(),
+        };
+        if (!Number.isFinite(next.rate) || next.rate <= 0)
+          throw Error("请填写有效汇率");
+        if (account) Object.assign(account, next);
+        else current().accounts.push({ id: uid(), ...next });
+        await save();
+      },
+    );
+    $("#f-opening").inputMode = "decimal";
+    $("#f-rate").step = "any";
+  }
+  function manageAccounts() {
+    modal(
+      "账户管理",
+      `<div class="row spaced"><h3>账户</h3>${button("新建账户", "ledger-account-edit", "", 'class="primary"')}</div>${
+        activeAccounts()
+          .map(
+            (account) =>
+              `<div class="ledger-row"><div><strong>${esc(account.title)}</strong><small>${esc(accountTypeName[account.type])} · ${account.currency}</small></div><div class="actions">${button("编辑", "ledger-account-edit", account.id)}${button("删除", "delete", account.id, 'data-kind="accounts"')}</div></div>`,
+          )
+          .join("") || '<div class="empty">还没有账户</div>'
+      }`,
+      null,
+    );
   }
   function renderFocus(c) {
     const f = current().focusDraft;
@@ -418,6 +653,8 @@ export function createFeatures(ctx) {
   }
   async function route(action, id) {
     if (action === "ledger-edit") editLedger(id);
+    else if (action === "ledger-accounts") manageAccounts();
+    else if (action === "ledger-account-edit") accountDialog(id);
     else if (action === "ledger-budget") {
       const b = current().budgets.find(
         (b) => !b.deletedAt && b.month === ledgerMonth,
@@ -455,14 +692,34 @@ export function createFeatures(ctx) {
         (r) => !r.deletedAt && r.date.startsWith(ledgerMonth),
       );
       const csv = [
-        ["日期", "收支", "名称", "金额（元）", "分类", "账户", "备注"],
+        [
+          "日期",
+          "类型",
+          "名称",
+          "金额",
+          "币种",
+          "汇率",
+          "人民币折算",
+          "分类",
+          "账户",
+          "转入账户",
+          "投资标的",
+          "数量",
+          "备注",
+        ],
         ...rows.map((r) => [
           r.date,
-          r.kind === "income" ? "收入" : "支出",
+          kindName[r.kind] || r.kind,
           r.title,
           (r.cents / 100).toFixed(2),
+          r.currency || "CNY",
+          r.rate || 1,
+          (baseCents(r) / 100).toFixed(2),
           r.category,
-          r.account,
+          accountName(r.account),
+          accountName(r.toAccount),
+          r.asset,
+          r.quantity,
           r.memo,
         ]),
       ]

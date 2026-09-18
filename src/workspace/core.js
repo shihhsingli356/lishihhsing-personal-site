@@ -5,6 +5,7 @@ export const collections = [
   "tasks",
   "notes",
   "events",
+  "accounts",
   "ledger",
   "focus",
   "budgets",
@@ -145,6 +146,7 @@ export function emptyState() {
     tasks: [],
     notes: [],
     events: [],
+    accounts: [],
     ledger: [],
     focus: [],
     budgets: [],
@@ -270,6 +272,30 @@ export function normalize(raw) {
               at: str(h.at),
             })),
         };
+      if (k === "accounts") {
+        const openingCents = Number.isSafeInteger(x.openingCents)
+          ? x.openingCents
+          : 0;
+        const rate = Number(x.rate ?? 1);
+        if (Math.abs(openingCents) > 99999999999) throw Error("账户余额无效");
+        if (!Number.isFinite(rate) || rate <= 0 || rate > 1000000)
+          throw Error("账户汇率无效");
+        return {
+          ...y,
+          type: allowed(
+            x.type,
+            ["cash", "bank", "savings", "ewallet", "credit", "investment"],
+            "bank",
+          ),
+          currency: allowed(
+            x.currency,
+            ["CNY", "USD", "HKD", "EUR", "JPY", "GBP"],
+            "CNY",
+          ),
+          openingCents,
+          rate,
+        };
+      }
       if (k === "ledger" || k === "budgets") {
         if (
           !Number.isSafeInteger(x.cents) ||
@@ -281,16 +307,40 @@ export function normalize(raw) {
           if (!validDay(x.month + "-01")) throw Error("预算月份无效");
           return { ...y, month: x.month, cents: x.cents };
         }
-        if (!validDay(x.date) || !["income", "expense"].includes(x.kind))
+        if (
+          !validDay(x.date) ||
+          ![
+            "income",
+            "expense",
+            "transfer",
+            "investment_buy",
+            "investment_sell",
+          ].includes(x.kind)
+        )
           throw Error("账目日期或类型无效");
+        const rate = Number(x.rate ?? 1);
+        const quantity = Number(x.quantity ?? 0);
+        if (!Number.isFinite(rate) || rate <= 0 || rate > 1000000)
+          throw Error("汇率无效");
+        if (!Number.isFinite(quantity) || quantity < 0 || quantity > 1000000000)
+          throw Error("投资数量无效");
         return {
           ...y,
           project,
           date: x.date,
           cents: x.cents,
           kind: x.kind,
+          currency: allowed(
+            x.currency,
+            ["CNY", "USD", "HKD", "EUR", "JPY", "GBP"],
+            "CNY",
+          ),
+          rate,
           category: str(x.category, "其他"),
           account: str(x.account, "默认账户"),
+          toAccount: str(x.toAccount),
+          asset: str(x.asset),
+          quantity,
           memo: str(x.memo),
         };
       }
@@ -500,6 +550,10 @@ export function importCopy(state, incoming) {
       x.id = map.get(x.id);
       for (const f of ["project", "goal", "sourceNote", "task"])
         if (f in x) x[f] = map.get(x[f]) || "";
+      if (k === "ledger") {
+        if (map.has(x.account)) x.account = map.get(x.account);
+        if (map.has(x.toAccount)) x.toAccount = map.get(x.toAccount);
+      }
       if (
         k === "notes" &&
         x.type === "diary" &&

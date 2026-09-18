@@ -381,6 +381,21 @@ textarea {
   font-size: 10px;
   white-space: nowrap;
 }
+.note-tool-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+.note-tool-tabs button {
+  min-height: 32px;
+  padding: 5px;
+  font-size: 12px;
+}
+.template-tool-list code {
+  white-space: normal;
+  text-align: right;
+}
 @media (max-width: 1100px) {
   .editor-body {
     grid-template-columns: minmax(0, 1fr);
@@ -604,6 +619,44 @@ input[type="checkbox"] {
 }
 .ledger-row small {
   display: block;
+}
+.ledger-amount {
+  min-width: 118px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 0;
+}
+.account-row + .account-row {
+  border-top: 1px solid var(--workspace-line);
+}
+.account-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--workspace-muted);
+}
+.account-row > strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px 10px;
+  align-items: baseline;
+  padding-top: 12px;
+}
+.ledger-summary strong {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-summary span {
+  color: var(--workspace-muted);
 }
 .income {
   color: #359d79;
@@ -1489,15 +1542,11 @@ summary::marker {
   margin: 0;
   font-size: 32px;
 }
-.auth-subtitle {
-  margin: 12px auto 26px;
-  color: var(--workspace-muted);
-}
 .auth-segment {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin-bottom: 22px;
+  margin: 26px 0 22px;
   padding: 4px;
   border-radius: 13px;
   background: var(--workspace-surface-muted);

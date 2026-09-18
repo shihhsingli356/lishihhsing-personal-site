@@ -63,6 +63,7 @@ let view = "today",
   preview = false,
   rememberedNoteSelection = "";
 let noteKind = "document";
+let noteToolsMode = "markdown";
 let toastTimer,
   saveQueue = Promise.resolve(),
   persistError = false,
@@ -86,6 +87,7 @@ const collectionNames = {
   tasks: "任务",
   notes: "笔记",
   events: "日程",
+  accounts: "账户",
   ledger: "账目",
   focus: "专注记录",
   budgets: "预算",
@@ -701,7 +703,7 @@ function editGoal(id = "") {
       ) +
       area("计划与说明", "description", g?.description) +
       (g
-        ? `<label><input name="shift" type="checkbox"> 按开始日期的变化移动未完成任务</label><p class="muted">已完成任务、未安排日期的任务保持不变。暂停或结束的目标，其任务仍保留在项目中。</p><div id="move-preview"></div>`
+        ? `<label><input name="shift" type="checkbox"> 按开始日期的变化移动未完成任务</label><div id="move-preview"></div>`
         : ""),
     async (v) => {
       if (!v.title.trim()) throw Error("请填写目标名称");
@@ -731,7 +733,7 @@ function editGoal(id = "") {
   function showMoves(v) {
     const changes = goalPreview(state, g, v, !!v.shift);
     $("#move-preview").innerHTML =
-      `<h3>调整预览</h3><p>${g.start} → ${esc(v.start)}；截止 ${g.end} → ${esc(v.end)}<br>状态：${statusNames[g.status]} → ${statusNames[v.status]}</p>${changes.length ? `<table><thead><tr><th>任务</th><th>原日期</th><th>调整后</th></tr></thead><tbody>${changes.map((t) => `<tr><td>${esc(t.title)}${t.done ? "（已完成，保留）" : ""}</td><td>${t.from || "待安排"}</td><td>${t.to || "待安排"}${t.outside ? " · 超出目标区间" : ""}</td></tr>`).join("")}</tbody></table>` : "<p>没有关联任务。</p>"}<p class="muted">超出区间的任务会保留，并在目标中提示重新安排。</p>`;
+      `<h3>调整预览</h3><p>${g.start} → ${esc(v.start)}；截止 ${g.end} → ${esc(v.end)}<br>状态：${statusNames[g.status]} → ${statusNames[v.status]}</p>${changes.length ? `<table><thead><tr><th>任务</th><th>原日期</th><th>调整后</th></tr></thead><tbody>${changes.map((t) => `<tr><td>${esc(t.title)}${t.done ? "（已完成，保留）" : ""}</td><td>${t.from || "待安排"}</td><td>${t.to || "待安排"}${t.outside ? " · 超出目标区间" : ""}</td></tr>`).join("")}</tbody></table>` : "<p>没有关联任务。</p>"}`;
   }
   if (g)
     $("#form").oninput = () => {
@@ -776,8 +778,7 @@ function editEvent(id = "", day = selectedDay) {
         "until",
         event?.until || addDays(day, 28),
         "date",
-      ) +
-      `<p class="muted">重复截止日期指最后一次开始的日期；编辑作用于整组日程。</p>`,
+      ),
     async (v) => {
       if (!v.title.trim()) throw Error("请填写名称");
       if (
@@ -829,7 +830,7 @@ function restoreItem(k, id) {
 function trash() {
   modal(
     "回收站",
-    `<p class="muted">删除的内容保留在这里，可随时恢复。</p>${
+    `${
       collections
         .map((k) =>
           state[k]
@@ -1002,7 +1003,7 @@ function renderProjects(c) {
       .join("") || blank("这里还没有项目")
   }</div>${
     p
-      ? `<div class="card"><div class="row"><h2>${esc(p.title)}${p.archived ? "（已归档）" : ""}</h2><div class="actions">${button("编辑", "project", p.id)}${button(p.archived ? "恢复项目" : "归档项目", "archive-project", p.id)}</div></div><div class="actions">${button("添加任务", "task")}${button("添加目标", "goal")}${button("新建文档", "note")}${button("添加日程", "event")}</div><h3>任务</h3>${taskList(live(state, "tasks", true).filter((t) => t.project === p.id))}<h3>目标</h3>${
+      ? `<div class="card"><div class="row"><h2>${esc(p.title)}${p.archived ? "（已归档）" : ""}</h2><div class="actions">${button("编辑", "project", p.id)}${button(p.archived ? "恢复项目" : "归档项目", "archive-project", p.id)}${button("删除", "delete", p.id, 'data-kind="projects"')}</div></div><div class="actions">${button("添加任务", "task")}${button("添加目标", "goal")}${button("新建文档", "note")}${button("添加日程", "event")}</div><h3>任务</h3>${taskList(live(state, "tasks", true).filter((t) => t.project === p.id))}<h3>目标</h3>${
           live(state, "goals", true)
             .filter((g) => g.project === p.id)
             .map(goalCard)
@@ -1216,12 +1217,78 @@ function markdownToolbar() {
     ["link", "链接", "[ ]( )"],
     ["divider", "分隔线", "---"],
   ];
-  return `<aside class="markdown-tools" aria-label="Markdown 快捷格式"><strong>Markdown</strong><div class="markdown-tool-list">${tools
+  return `<div class="markdown-tool-list">${tools
     .map(
       ([id, label, syntax]) =>
         `<button type="button" data-action="markdown-format" data-id="${id}" title="插入 ${syntax}"><span>${label}</span><code>${syntax}</code></button>`,
     )
-    .join("")}</div></aside>`;
+    .join("")}</div>`;
+}
+const diaryTemplates = {
+  light: {
+    label: "轻量复盘",
+    hint: "三分钟完成",
+    body: "## 今天发生了什么\n\n## 值得保留的事\n\n## 明天先做什么\n",
+  },
+  study: {
+    label: "学习复盘",
+    hint: "知识与错题",
+    body: "## 今日学习\n\n## 已经掌握\n\n## 错题与疑问\n\n## 明日计划\n",
+  },
+  project: {
+    label: "项目复盘",
+    hint: "进展与阻碍",
+    body: "## 今日进展\n\n## 遇到的阻碍\n\n## 已做决定\n\n## 下一步行动\n",
+  },
+  emotion: {
+    label: "情绪记录",
+    hint: "感受与触发",
+    body: "## 此刻的感受\n\n## 发生了什么\n\n## 我真正需要什么\n\n## 可以怎样照顾自己\n",
+  },
+  weekly: {
+    label: "一周总结",
+    hint: "成果与调整",
+    body: "## 本周完成\n\n## 时间花在哪里\n\n## 做得好的地方\n\n## 下周调整\n\n## 下周最重要的一件事\n",
+  },
+};
+function diaryTemplateToolbar() {
+  return `<div class="markdown-tool-list template-tool-list">${Object.entries(
+    diaryTemplates,
+  )
+    .map(
+      ([id, item]) =>
+        `<button type="button" data-action="diary-template" data-id="${id}"><span>${item.label}</span><code>${item.hint}</code></button>`,
+    )
+    .join("")}</div>`;
+}
+function noteTools(n) {
+  const tabs =
+    n.type === "diary"
+      ? `<div class="note-tool-tabs">${button("格式", "note-tools", "markdown", `class="${noteToolsMode === "markdown" ? "selected" : ""}"`)}${button("复盘", "note-tools", "templates", `class="${noteToolsMode === "templates" ? "selected" : ""}"`)}</div>`
+      : "";
+  return `<aside class="markdown-tools" aria-label="编辑工具">${tabs}${
+    n.type === "diary" && noteToolsMode === "templates"
+      ? diaryTemplateToolbar()
+      : markdownToolbar()
+  }</aside>`;
+}
+function insertDiaryTemplate(kind) {
+  const template = diaryTemplates[kind],
+    body = $("#note-body"),
+    n = state.notes.find((item) => item.id === noteId);
+  if (!template || !body || !n || preview) return;
+  noteCheckpoint(n);
+  const start = body.selectionStart,
+    end = body.selectionEnd,
+    prefix =
+      start && !body.value.slice(0, start).endsWith("\n\n") ? "\n\n" : "",
+    text = prefix + template.body;
+  body.setRangeText(text, start, end, "end");
+  n.body = body.value;
+  n.updatedAt = new Date().toISOString();
+  save();
+  body.focus();
+  message("已插入" + template.label);
 }
 function markdownFormat(kind) {
   const body = $("#note-body"),
@@ -1336,7 +1403,7 @@ function noteList() {
       )
       .map(
         (n) =>
-          `<button class="note-item ${n.id === noteId ? "active" : ""}" data-action="open-note" data-id="${n.id}"><strong>${n.pinned && n.type === "document" ? "置顶 · " : ""}${esc(n.title)}</strong><br><small>${n.type === "diary" ? "日记" : "文档"} · ${n.date} · 私密<br>${esc(projectName(n.project))}</small></button>`,
+          `<button class="note-item ${n.id === noteId ? "active" : ""}" data-action="open-note" data-id="${n.id}"><strong>${n.pinned && n.type === "document" ? "置顶 · " : ""}${esc(n.title)}</strong><br><small>${n.type === "diary" ? "日记" : "文档"} · ${n.date}<br>${esc(projectName(n.project))}</small></button>`,
       )
       .join("") || blank("没有匹配的笔记")
   );
@@ -1375,7 +1442,7 @@ function renderNotes(c) {
           )
           .join(
             "",
-          )}</select><div class="actions spaced">${button(preview ? "返回编辑" : "Markdown 预览", "preview")}${button("插入图片", "image")}${button("选中文字转任务", "selection-task")}${n.type === "document" ? button(n.pinned ? "取消置顶" : "置顶", "note-pin", n.id) : ""}${button("版本历史", "history", n.id)}${button("删除", "delete", n.id, 'data-kind="notes"')}</div>${n.type === "diary" ? `<div class="actions">${button("插入复盘模板", "template", n.id)}</div>` : ""}<div class="editor-body"><div class="editor-main"><label for="note-body">正文</label><textarea id="note-body" ${preview ? "hidden" : ""} placeholder="写下一句话，或用 # 标题、- 列表、**加粗** 整理内容…">${esc(n.body)}</textarea><div id="note-preview" class="preview" ${preview ? "" : "hidden"}>${preview ? markdown(n.body) : ""}</div></div>${preview ? "" : markdownToolbar()}</div>`
+          )}</select><div class="actions spaced">${button(preview ? "返回编辑" : "Markdown 预览", "preview")}${button("插入图片", "image")}${button("选中文字转任务", "selection-task")}${n.type === "document" ? button(n.pinned ? "取消置顶" : "置顶", "note-pin", n.id) : ""}${button("版本历史", "history", n.id)}${button("删除", "delete", n.id, 'data-kind="notes"')}</div><div class="editor-body"><div class="editor-main"><label for="note-body">正文</label><textarea id="note-body" ${preview ? "hidden" : ""} placeholder="写下一句话，或用 # 标题、- 列表、**加粗** 整理内容…">${esc(n.body)}</textarea><div id="note-preview" class="preview" ${preview ? "" : "hidden"}>${preview ? markdown(n.body) : ""}</div></div>${preview ? "" : noteTools(n)}</div>`
       : blank("选择或新建一篇笔记");
   c.innerHTML = `<div class="row spaced"><div class="actions">${button("文档", "note-kind", "document", `class="${noteKind === "document" ? "selected" : ""}"`)}${button("日记", "note-kind", "diary", `class="${noteKind === "diary" ? "selected" : ""}"`)}</div><div class="actions">${noteKind === "diary" ? `<input id="diary-date" type="date" value="${today()}" aria-label="日记日期">${button("打开日记", "diary-date")}` : button("新建文档", "doc-template", "", 'class="primary"')}</div></div><div class="split"><section><input id="search" aria-label="搜索笔记" placeholder="搜索标题与正文" value="${esc(search)}"><div id="note-list" class="note-list spaced">${noteList()}</div></section><section class="card editor">${noteEditor}</section></div>`;
   $("#search").oninput = (e) => {
@@ -1422,7 +1489,7 @@ function history(id) {
   flushHistory();
   modal(
     "版本历史 · " + n.title,
-    `<p class="muted">保留最近 30 个编辑版本。恢复前会保留当前版本。</p>${n.history?.map((h, i) => `<details><summary>${esc(h.at.replace("T", " ").slice(0, 19))} · ${esc(h.title)}</summary><div class="history-body">${esc(h.body)}</div>${button("恢复此版本", "restore-version", id, `data-index="${i}"`)}</details>`).join("") || blank("还没有旧版本，修改后离开笔记会保存一个历史版本。")}`,
+    `${n.history?.map((h, i) => `<details><summary>${esc(h.at.replace("T", " ").slice(0, 19))} · ${esc(h.title)}</summary><div class="history-body">${esc(h.body)}</div>${button("恢复此版本", "restore-version", id, `data-index="${i}"`)}</details>`).join("") || blank("还没有旧版本")}`,
     null,
   );
 }
@@ -1507,7 +1574,7 @@ async function recoveries() {
   const list = await recoveryList(scope);
   modal(
     "工作区恢复点",
-    `<p class="muted">保留最近 5 个恢复点。恢复前先保留当前内容。</p>${list.map((r) => `<div class="task"><div class="body">${esc(r.label)}<br><small>${esc(r.at)}</small></div>${button("恢复", "recovery", r.id)}</div>`).join("") || blank("尚无恢复点")}`,
+    `${list.map((r) => `<div class="task"><div class="body">${esc(r.label)}<br><small>${esc(r.at)}</small></div>${button("恢复", "recovery", r.id)}</div>`).join("") || blank("尚无恢复点")}`,
     null,
   );
 }
@@ -1671,6 +1738,7 @@ async function route(action, id, b) {
       message("已取消本次，后续日程保留", true);
       break;
     case "delete":
+      if ($("#dialog").open && b.dataset.kind === "accounts") close();
       deleteItem(b.dataset.kind, id);
       break;
     case "restore":
@@ -1728,6 +1796,7 @@ async function route(action, id, b) {
       noteKind = state.notes.find((n) => n.id === id)?.type || "document";
       view = "notes";
       preview = false;
+      noteToolsMode = "markdown";
       rememberedNoteSelection = "";
       render();
       break;
@@ -1738,6 +1807,7 @@ async function route(action, id, b) {
       rememberedNoteSelection = "";
       noteId = live(state, "notes", true).find((n) => n.type === id)?.id || "";
       preview = false;
+      noteToolsMode = "markdown";
       render();
       break;
     case "note-pin":
@@ -1814,15 +1884,13 @@ async function route(action, id, b) {
     case "markdown-format":
       markdownFormat(id);
       break;
-    case "template": {
-      const n = state.notes.find((n) => n.id === id);
-      noteCheckpoint(n);
-      change(
-        () =>
-          (n.body += "\n\n## 今日感受\n\n## 做得不错的事\n\n## 明天的一小步\n"),
-      );
+    case "note-tools":
+      noteToolsMode = id === "templates" ? "templates" : "markdown";
+      render();
       break;
-    }
+    case "diary-template":
+      insertDiaryTemplate(id);
+      break;
     case "history":
       history(id);
       break;
@@ -1923,7 +1991,11 @@ document.addEventListener("selectionchange", () => {
       : "";
 });
 document.addEventListener("pointerdown", (e) => {
-  if (e.target.closest('button[data-action="markdown-format"]')) {
+  if (
+    e.target.closest(
+      'button[data-action="markdown-format"], button[data-action="diary-template"]',
+    )
+  ) {
     e.preventDefault();
     return;
   }
