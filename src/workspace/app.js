@@ -27,6 +27,8 @@ import {
   taskDoneOn,
   taskOccurrencesBetween,
   taskProgress,
+  shiftTaskSchedule,
+  swapTaskSchedules,
   noteCheckpoint,
   importCopy,
 } from "./core.js";
@@ -68,6 +70,7 @@ let view = "today",
 let noteKind = "document";
 let noteToolsMode = "markdown";
 let projectSort = "timeAsc";
+const openDetails = new Set();
 let toastTimer,
   saveQueue = Promise.resolve(),
   persistError = false,
@@ -403,7 +406,7 @@ function upcomingTaskPanel() {
       (sum, group) => sum + group.items.length,
       0,
     );
-  return `<details class="card upcoming-panel"><summary><span>接下来 7 天</span><span class="tag">${groups.length ? groups.length + " 项任务 · " + occurrenceCount + " 次安排" : "暂无安排"}</span></summary>${
+  return `<details class="card upcoming-panel" data-persist-key="upcoming-seven"><summary><span>接下来 7 天</span><span class="tag">${groups.length ? groups.length + " 项任务 · " + occurrenceCount + " 次安排" : "暂无安排"}</span></summary>${
     groups.length
       ? `<div class="upcoming-groups">${groups
           .map(
@@ -515,6 +518,8 @@ function editTask(id = "", defaults = {}) {
       repeat: "daily",
       repeatInterval: 1,
       repeatUnit: "days",
+      repeatEndMode: t ? "date" : "duration",
+      endAfterDays: t?.date && t?.until ? dayDiff(t.date, t.until) : 27,
       project: projectId,
       ...defaults,
       ...t,
@@ -575,7 +580,19 @@ function editTask(id = "", defaults = {}) {
               Math.max(1, Math.floor(Number(v.repeatInterval) || 1)),
             )
           : 1;
+      if (schedule === "repeat" && v.repeatEndMode === "duration") {
+        const endAfterDays = Math.floor(Number(v.endAfterDays));
+        if (
+          !Number.isSafeInteger(endAfterDays) ||
+          endAfterDays < 0 ||
+          endAfterDays > 3659
+        )
+          throw Error("请填写有效的结束天数");
+        v.until = addDays(v.date, endAfterDays);
+      }
       v.until = schedule === "repeat" ? v.until : "";
+      delete v.repeatEndMode;
+      delete v.endAfterDays;
       if (schedule !== "none" && !validDay(v.date))
         throw Error("请填写开始日期");
       if (schedule === "range" && (!validDay(v.endDate) || v.endDate < v.date))
@@ -658,16 +675,30 @@ function editTask(id = "", defaults = {}) {
         : "daily";
       formState.repeat = repeatValue;
       scheduleFields.innerHTML =
-        '<div class="grid">' +
         field("开始日期", "date", formState.date || today(), "date", true) +
-        field(
+        select(
+          "截止方式",
+          "repeatEndMode",
+          [
+            ["duration", "填写多少天后"],
+            ["date", "选择截止日期"],
+          ],
+          formState.repeatEndMode || "duration",
+        ) +
+        `<div id="task-repeat-date" ${formState.repeatEndMode === "duration" ? "hidden" : ""}>${field(
           "重复截止日期",
           "until",
-          formState.until || addDays(formState.date || today(), 28),
+          formState.until || addDays(formState.date || today(), 27),
           "date",
           true,
-        ) +
-        "</div>" +
+        )}</div>` +
+        `<div id="task-repeat-duration" ${formState.repeatEndMode === "date" ? "hidden" : ""}>${field(
+          "多少天后结束",
+          "endAfterDays",
+          formState.endAfterDays ?? 27,
+          "number",
+          true,
+        )}</div>` +
         select("重复频率", "repeat", repeatOptions, repeatValue) +
         (repeatValue === "custom"
           ? '<div class="grid">' +
@@ -688,6 +719,7 @@ function editTask(id = "", defaults = {}) {
           : "");
     }
     $("#f-repeat")?.addEventListener("change", paintScheduleFields);
+    $("#f-repeatEndMode")?.addEventListener("change", paintScheduleFields);
   };
   $("#f-scheduleType").addEventListener("change", paintScheduleFields);
   $("#f-goal").addEventListener("change", () => {
@@ -699,6 +731,167 @@ function editTask(id = "", defaults = {}) {
     if (goal && goal.project !== $("#f-project").value) $("#f-goal").value = "";
   });
   paintScheduleFields();
+}
+function adjustTasks(initialId = "") {
+  const eligible = live(state, "tasks", true)
+      .filter((task) => !task.done && validDay(task.date))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    selected = new Set(
+      initialId && eligible.some((task) => task.id === initialId)
+        ? [initialId]
+        : [],
+    ),
+    projects = live(state, "projects", true),
+    goals = live(state, "goals", true);
+  modal(
+    "调整任务时间",
+    `<div class="adjust-shell"><div class="segmented adjust-mode"><button type="button" class="active" data-adjust-mode="shift">批量移动</button><button type="button" data-adjust-mode="swap">交换时间</button></div><div class="grid adjust-filters">${select("项目", "adjustProject", [["", "全部项目"], ...projects.map((project) => [project.id, project.title])])}${select("目标", "adjustGoal", [["", "全部目标"], ...goals.map((goal) => [goal.id, goal.title])])}</div><label class="adjust-search">搜索任务<input id="adjust-query" placeholder="输入名称、项目或目标"></label><div class="row adjust-selection"><strong id="adjust-count">已选 0 项</strong><button type="button" id="adjust-clear">清空</button></div><div id="adjust-task-list" class="adjust-task-list"></div><section id="adjust-shift" class="adjust-operation"><h3>移动已选任务</h3><div class="adjust-presets"><button type="button" data-adjust-delta="-7">− 1 周</button><button type="button" data-adjust-delta="-1">− 1 天</button><button type="button" data-adjust-delta="1" class="active">+ 1 天</button><button type="button" data-adjust-delta="7">+ 1 周</button></div><div class="grid">${field("自定义数量", "adjustAmount", 1, "number", true)}${select(
+      "单位",
+      "adjustUnit",
+      [
+        ["days", "天"],
+        ["weeks", "周"],
+      ],
+      "days",
+    )}</div></section><section id="adjust-swap" class="adjust-operation" hidden><h3>与另一项任务交换</h3><label>检索交换对象<input id="adjust-swap-query" placeholder="输入名称或日期"></label><label>选择任务<select id="adjust-partner"></select></label></section></div>`,
+    async () => {
+      if (!selected.size) throw Error("请至少选择一项任务");
+      const mode = $("[data-adjust-mode].active")?.dataset.adjustMode;
+      if (mode === "swap") {
+        if (selected.size !== 1) throw Error("交换时间时只能选择一项任务");
+        const first = state.tasks.find((task) => task.id === [...selected][0]),
+          second = state.tasks.find(
+            (task) => task.id === $("#adjust-partner").value,
+          );
+        if (!second) throw Error("请选择交换对象");
+        snapshotUndo("交换任务时间");
+        if (!swapTaskSchedules(first, second)) throw Error("任务日期无法交换");
+      } else {
+        const amount = Math.floor(Number($("#f-adjustAmount").value)),
+          multiplier = $("#f-adjustUnit").value === "weeks" ? 7 : 1,
+          delta = amount * multiplier;
+        if (!Number.isSafeInteger(amount) || !amount || Math.abs(delta) > 3660)
+          throw Error("请填写有效的移动数量");
+        snapshotUndo("批量移动任务");
+        for (const id of selected)
+          shiftTaskSchedule(
+            state.tasks.find((task) => task.id === id),
+            delta,
+          );
+      }
+      await save();
+      message(mode === "swap" ? "任务时间已交换" : "任务时间已调整", true);
+    },
+    "应用调整",
+  );
+  const goalName = (task) =>
+      goals.find((goal) => goal.id === task.goal)?.title || "未关联目标",
+    matches = (task, query = $("#adjust-query").value.trim()) =>
+      (!$("#f-adjustProject").value ||
+        task.project === $("#f-adjustProject").value) &&
+      (!$("#f-adjustGoal").value || task.goal === $("#f-adjustGoal").value) &&
+      (!query ||
+        [task.title, task.date, projectName(task.project), goalName(task)]
+          .join(" ")
+          .toLowerCase()
+          .includes(query.toLowerCase())),
+    updateCount = () => {
+      $("#adjust-count").textContent = `已选 ${selected.size} 项`;
+    },
+    renderPartner = () => {
+      const query = $("#adjust-swap-query").value.trim().toLowerCase(),
+        grouped = new Map();
+      for (const task of eligible) {
+        if (selected.has(task.id) || !matches(task, "")) continue;
+        if (
+          query &&
+          ![task.title, task.date, projectName(task.project), goalName(task)]
+            .join(" ")
+            .toLowerCase()
+            .includes(query)
+        )
+          continue;
+        const group = `${projectName(task.project)} · ${goalName(task)}`;
+        if (!grouped.has(group)) grouped.set(group, []);
+        grouped.get(group).push(task);
+      }
+      $("#adjust-partner").innerHTML =
+        '<option value="">选择交换对象</option>' +
+        [...grouped]
+          .slice(0, 30)
+          .map(
+            ([group, tasks]) =>
+              `<optgroup label="${esc(group)}">${tasks
+                .slice(0, 30)
+                .map(
+                  (task) =>
+                    `<option value="${task.id}">${esc(task.date)} · ${esc(task.title)}</option>`,
+                )
+                .join("")}</optgroup>`,
+          )
+          .join("");
+    },
+    renderChoices = () => {
+      const items = eligible.filter((task) => matches(task));
+      $("#adjust-task-list").innerHTML =
+        items
+          .slice(0, 200)
+          .map(
+            (task) =>
+              `<label class="adjust-task ${selected.has(task.id) ? "selected" : ""}"><input type="checkbox" data-adjust-task="${task.id}" ${selected.has(task.id) ? "checked" : ""}><span><strong>${esc(task.title)}</strong><small>${task.date} · ${esc(projectName(task.project))} · ${esc(goalName(task))}</small></span></label>`,
+          )
+          .join("") || '<div class="empty">没有匹配任务</div>';
+      $("#adjust-task-list")
+        .querySelectorAll("[data-adjust-task]")
+        .forEach((input) => {
+          input.onchange = () => {
+            if (input.checked) selected.add(input.dataset.adjustTask);
+            else selected.delete(input.dataset.adjustTask);
+            input
+              .closest(".adjust-task")
+              .classList.toggle("selected", input.checked);
+            updateCount();
+            renderPartner();
+          };
+        });
+      updateCount();
+      renderPartner();
+    };
+  $("#adjust-query").oninput = renderChoices;
+  $("#f-adjustProject").onchange = renderChoices;
+  $("#f-adjustGoal").onchange = renderChoices;
+  $("#adjust-swap-query").oninput = renderPartner;
+  $("#adjust-clear").onclick = () => {
+    selected.clear();
+    renderChoices();
+  };
+  document.querySelectorAll("[data-adjust-mode]").forEach((control) => {
+    control.onclick = () => {
+      document
+        .querySelectorAll("[data-adjust-mode]")
+        .forEach((button) =>
+          button.classList.toggle("active", button === control),
+        );
+      const swap = control.dataset.adjustMode === "swap";
+      $("#adjust-shift").hidden = swap;
+      $("#adjust-swap").hidden = !swap;
+      renderPartner();
+    };
+  });
+  document.querySelectorAll("[data-adjust-delta]").forEach((control) => {
+    control.onclick = () => {
+      const delta = Number(control.dataset.adjustDelta);
+      $("#f-adjustAmount").value =
+        Math.abs(delta) === 7 ? Math.sign(delta) : delta;
+      $("#f-adjustUnit").value = Math.abs(delta) === 7 ? "weeks" : "days";
+      document
+        .querySelectorAll("[data-adjust-delta]")
+        .forEach((button) =>
+          button.classList.toggle("active", button === control),
+        );
+    };
+  });
+  renderChoices();
 }
 function quickTask(text) {
   if (!text.trim()) return;
@@ -726,26 +919,28 @@ function quickTask(text) {
   message("已记下，放在待安排");
 }
 function editGoal(id = "") {
-  const g = state.goals.find((x) => x.id === id);
+  const g = state.goals.find((x) => x.id === id),
+    initialStart = g?.start || rangeStart || selectedDay,
+    initialEnd = g?.end || rangeEnd || rangeStart || addDays(selectedDay, 14),
+    initialEndAfterDays = Math.max(0, dayDiff(initialStart, initialEnd));
   let reviewed = "";
   modal(
     g ? "编辑目标" : "创建目标",
     field("目标名称", "title", g?.title, "text", true) +
       projectField(g?.project || projectId) +
-      field(
-        "开始日期",
-        "start",
-        g?.start || rangeStart || selectedDay,
-        "date",
-        true,
+      field("开始日期", "start", initialStart, "date", true) +
+      select(
+        "结束方式",
+        "endMode",
+        [
+          ["duration", "填写多少天后"],
+          ["date", "选择结束日期"],
+        ],
+        g ? "date" : "duration",
       ) +
-      field(
-        "结束日期",
-        "end",
-        g?.end || rangeEnd || rangeStart || addDays(selectedDay, 14),
-        "date",
-        true,
-      ) +
+      `<div id="goal-end-date">${field("结束日期", "end", initialEnd, "date", true)}</div>` +
+      `<div id="goal-end-duration">${field("多少天后结束", "endAfterDays", initialEndAfterDays, "number", true)}</div>` +
+      field("目标颜色", "color", g?.color || "#5b8def", "color", true) +
       select(
         "目标状态",
         "status",
@@ -758,6 +953,18 @@ function editGoal(id = "") {
         : ""),
     async (v) => {
       if (!v.title.trim()) throw Error("请填写目标名称");
+      if (v.endMode === "duration") {
+        const endAfterDays = Math.floor(Number(v.endAfterDays));
+        if (
+          !Number.isSafeInteger(endAfterDays) ||
+          endAfterDays < 0 ||
+          endAfterDays > 3659
+        )
+          throw Error("请填写有效的结束天数");
+        v.end = addDays(v.start, endAfterDays);
+      }
+      delete v.endMode;
+      delete v.endAfterDays;
       if (!validDay(v.start) || !validDay(v.end) || v.end < v.start)
         throw Error("请填写有效的起止日期");
       if (g) {
@@ -791,6 +998,13 @@ function editGoal(id = "") {
     $("#move-preview").innerHTML =
       `<h3>调整预览</h3><p>${g.start} → ${esc(v.start)}；截止 ${g.end} → ${esc(v.end)}<br>状态：${statusNames[g.status]} → ${statusNames[v.status]}</p>${changes.length ? `<table><thead><tr><th>任务</th><th>原日期</th><th>调整后</th></tr></thead><tbody>${changes.map((t) => `<tr><td>${esc(t.title)}${t.done ? "（已完成，保留）" : ""}</td><td>${t.from || "待安排"}</td><td>${t.to || "待安排"}${t.outside ? " · 超出目标区间" : ""}</td></tr>`).join("")}</tbody></table>` : "<p>没有关联任务。</p>"}`;
   }
+  const toggleGoalEnd = () => {
+    const duration = $("#f-endMode").value === "duration";
+    $("#goal-end-duration").hidden = !duration;
+    $("#goal-end-date").hidden = duration;
+  };
+  $("#f-endMode").addEventListener("change", toggleGoalEnd);
+  toggleGoalEnd();
   if (g)
     $("#form").oninput = () => {
       reviewed = "";
@@ -973,10 +1187,14 @@ function eventList(day) {
     conflicts = overlaps(events);
   return (
     events
-      .map(
-        (e) =>
-          `<div class="event" style="border-left-color:${esc(e.color || "#648bd6")}"><div class="row"><strong>${e.continued ? "续 · " : ""}${e.start}–${e.end} ${esc(e.title)}</strong><span class="tag">${repeatNames[e.repeat]}</span></div><small>${esc(projectName(e.project))}${e.task ? " · " + esc(state.tasks.find((t) => t.id === e.task)?.title || "关联任务已移除") : ""}</small>${conflicts.has(e.id) ? '<p class="warning">与当天其他日程时间重叠</p>' : ""}<div class="actions">${button("编辑", "event", e.id)}${e.repeat !== "none" ? button("取消本次", "skip-event", e.id, `data-day="${e.originDay || day}"`) : ""}${button("删除", "delete", e.id, 'data-kind="events"')}</div></div>`,
-      )
+      .map((e) => {
+        const source = state.events.find((event) => event.id === e.id) || e,
+          schedule =
+            e.originDay !== e.occurrenceEndDate
+              ? `${e.originDay} ${source.start} → ${e.occurrenceEndDate} ${source.end}`
+              : `${e.start}–${e.end}`;
+        return `<div class="event" style="border-left-color:${esc(e.color || "#648bd6")}"><div class="row"><strong>${schedule} ${esc(e.title)}</strong><span class="tag">${repeatNames[e.repeat]}</span></div><small>${esc(projectName(e.project))}${e.task ? " · " + esc(state.tasks.find((t) => t.id === e.task)?.title || "关联任务已移除") : ""}</small>${conflicts.has(e.id) ? '<p class="warning">与当天其他日程时间重叠</p>' : ""}<div class="actions">${button("编辑", "event", e.id)}${e.repeat !== "none" ? button("取消本次", "skip-event", e.id, `data-day="${e.originDay || day}"`) : ""}${button("删除", "delete", e.id, 'data-kind="events"')}</div></div>`;
+      })
       .join("") || blank("当天没有日程")
   );
 }
@@ -1017,6 +1235,8 @@ function goalCard(g, projectView = false) {
     stats = taskStats(ts, g.start, g.end),
     percent = stats.total ? Math.round((stats.done / stats.total) * 100) : 0,
     left = dayDiff(today(), g.end),
+    startsIn = dayDiff(today(), g.start),
+    totalDays = dayDiff(g.start, g.end) + 1,
     next = ts
       .flatMap((t) =>
         taskOccurrencesBetween(t, today() < g.start ? g.start : today(), g.end)
@@ -1031,11 +1251,25 @@ function goalCard(g, projectView = false) {
         (t.date < g.start || (t.endDate || t.until || t.date) > g.end),
     ).length;
   const linkedTasks = projectView
-    ? `<details class="goal-task-group"><summary>关联任务 · ${ts.length}</summary>${taskList(ts, true)}</details>`
-    : `<details><summary>关联任务</summary>${taskList(ts, true)}</details>`;
-  return `<section class="card goal-card"><div class="row"><h2>${esc(g.title)}</h2><span class="tag">${g.status === "active" ? (left < 0 ? "到期后 " + -left + " 天" : left === 0 ? "今天截止" : "剩余 " + left + " 天") : statusNames[g.status]}</span></div><small>${esc(projectName(g.project))} · ${g.start} → ${g.end}</small><p>${esc(g.description)}</p><div class="progress-line"><progress max="100" value="${percent}" aria-label="目标完成度 ${percent}%"></progress><span class="progress-label">${percent}%</span></div><p class="progress-meta">${stats.hasSeries ? "已完成 " + stats.done + "/" + stats.total + " 次安排 · " + stats.taskDone + "/" + stats.taskTotal + " 项任务" : "已完成 " + stats.taskDone + "/" + stats.taskTotal + " 项任务"}</p>${!projectView && g.status === "active" ? `<p>下一步：${next ? esc(next.t.title) + " · " + next.day : "暂无待办，可补充任务或完成目标"}</p>` : ""}${outside ? `<p class="warning">${outside} 项任务超出目标区间，可在下方重新安排。</p>` : ""}<div class="actions">${button("编辑目标", "goal", g.id)}${button("添加任务", "goal-task", g.id)}${button("删除", "delete", g.id, 'data-kind="goals"')}</div>${linkedTasks}</section>`;
+    ? `<details class="goal-task-group" data-persist-key="goal-tasks-${g.id}"><summary>关联任务 · ${ts.length}</summary>${taskList(ts, true)}</details>`
+    : `<details data-persist-key="goal-tasks-${g.id}"><summary>关联任务</summary>${taskList(ts, true)}</details>`;
+  const timing =
+    g.status !== "active"
+      ? statusNames[g.status]
+      : startsIn > 0
+        ? `还有 ${startsIn} 天开始 · 共计 ${totalDays} 天`
+        : left < 0
+          ? "到期后 " + -left + " 天"
+          : left === 0
+            ? "今天截止"
+            : "剩余 " + left + " 天";
+  return `<section class="card goal-card"><div class="row"><h2>${esc(g.title)}</h2><span class="tag">${timing}</span></div><small>${esc(projectName(g.project))} · ${g.start} → ${g.end}</small><p>${esc(g.description)}</p><div class="progress-line"><progress max="100" value="${percent}" aria-label="目标完成度 ${percent}%"></progress><span class="progress-label">${percent}%</span></div><p class="progress-meta">${stats.hasSeries ? "已完成 " + stats.done + "/" + stats.total + " 次安排 · " + stats.taskDone + "/" + stats.taskTotal + " 项任务" : "已完成 " + stats.taskDone + "/" + stats.taskTotal + " 项任务"}</p>${!projectView && g.status === "active" ? `<p>下一步：${next ? esc(next.t.title) + " · " + next.day : "暂无待办，可补充任务或完成目标"}</p>` : ""}${outside ? `<p class="warning">${outside} 项任务超出目标区间，可在下方重新安排。</p>` : ""}<div class="actions">${button("编辑目标", "goal", g.id)}${button("添加任务", "goal-task", g.id)}${button("删除", "delete", g.id, 'data-kind="goals"')}</div>${linkedTasks}</section>`;
 }
 function render() {
+  document.querySelectorAll("details[data-persist-key]").forEach((details) => {
+    if (details.open) openDetails.add(details.dataset.persistKey);
+    else openDetails.delete(details.dataset.persistKey);
+  });
   updateSaveLabel();
   const headings = {
     today: "今天",
@@ -1064,6 +1298,9 @@ function render() {
     ledger: features.renderLedger,
     focus: features.renderFocus,
   })[view](c);
+  document.querySelectorAll("details[data-persist-key]").forEach((details) => {
+    details.open = openDetails.has(details.dataset.persistKey);
+  });
 }
 function renderToday(c) {
   const tasks = currentTasks(),
@@ -1074,7 +1311,7 @@ function renderToday(c) {
       (t) => !taskIsSeries(t) && pending(t) && t.date && t.date < today(),
     ),
     shelved = tasks.filter((t) => t.shelved && !t.done);
-  c.innerHTML = `<form id="quick-form" class="card"><label for="quick">快速记一件事</label><div class="row"><input id="quick" name="title" placeholder="先记下，不必现在决定日期" required style="flex:1;min-width:180px"><button class="primary">记到待安排</button></div></form><div class="row spaced"><strong>${today()}</strong><div class="actions">${button("添加今日任务", "day-task", "", 'data-day="' + today() + '"')}${button("添加日程", "event")}${button("写日记", "diary", "", 'data-day="' + today() + '"')}</div></div><div class="grid"><section><div class="card"><h2>今日任务</h2>${taskList(todayTasks, false, today())}</div><div class="card"><h2>今日安排</h2>${eventList(today())}</div><div class="card"><h2>待安排</h2>${taskList(tasks.filter((t) => !t.date && pending(t)))}</div><details class="card"><summary>需要重新安排 · ${overdue.length} 项</summary>${taskList(overdue)}</details><details class="card"><summary>已搁置 · ${shelved.length} 项</summary>${taskList(shelved)}</details></section><section><h2>进行中的目标</h2>${
+  c.innerHTML = `<form id="quick-form" class="card"><label for="quick">快速记一件事</label><div class="row"><input id="quick" name="title" placeholder="先记下，不必现在决定日期" required style="flex:1;min-width:180px"><button class="primary">记到待安排</button></div></form><div class="row spaced"><strong>${today()}</strong><div class="actions">${button("调整任务", "task-adjust")}${button("添加今日任务", "day-task", "", 'data-day="' + today() + '"')}${button("添加日程", "event")}${button("写日记", "diary", "", 'data-day="' + today() + '"')}</div></div><div class="grid"><section><div class="card"><h2>今日任务</h2>${taskList(todayTasks, false, today())}</div><div class="card"><h2>今日安排</h2>${eventList(today())}</div><div class="card"><h2>待安排</h2>${taskList(tasks.filter((t) => !t.date && pending(t)))}</div><details class="card"><summary>需要重新安排 · ${overdue.length} 项</summary>${taskList(overdue)}</details><details class="card"><summary>已搁置 · ${shelved.length} 项</summary>${taskList(shelved)}</details></section><section><h2>进行中的目标</h2>${
     live(state, "goals")
       .filter((g) => g.status === "active")
       .map((goal) => goalCard(goal))
@@ -1122,13 +1359,38 @@ function projectDetail(p) {
       live(state, "events", true).filter((event) => event.project === p.id),
       "events",
     );
-  return `<section class="project-detail"><div class="card project-head"><div class="row"><div><h2>${esc(p.title)}${p.archived ? "（已归档）" : ""}</h2>${p.description ? `<p>${esc(p.description)}</p>` : ""}</div><div class="actions">${button("排列：" + projectSortNames[projectSort], "project-sort")}${button("编辑", "project", p.id)}${button(p.archived ? "恢复项目" : "归档项目", "archive-project", p.id)}${button("删除", "delete", p.id, 'data-kind="projects"')}</div></div><div class="actions">${button("添加目标", "goal", "", 'class="primary"')}${button("添加任务", "task")}${button("新建文档", "note")}${button("添加日程", "event")}</div></div><h2 class="project-section-title">目标 · ${goals.length}</h2><div class="project-goals">${goals.map((goal) => goalCard(goal, true)).join("") || blank("暂无目标")}</div><section class="card project-section"><h2>未关联目标的任务 · ${tasks.length}</h2>${taskList(tasks)}</section><div class="grid project-support"><section class="card project-section"><h2>笔记 · ${notes.length}</h2>${notes.map((note) => `<div class="project-link-row">${button(esc(note.title), "open-note", note.id)}<small>${note.date}</small></div>`).join("") || blank("暂无笔记")}</section><section class="card project-section"><h2>日程 · ${events.length}</h2>${events.map((event) => `<div class="project-link-row"><span><strong>${esc(event.title)}</strong><small>${event.date}${event.endDate && event.endDate !== event.date ? " → " + event.endDate : ""} · ${event.start}–${event.end}</small></span>${button("编辑", "event", event.id)}</div>`).join("") || blank("暂无日程")}</section></div></section>`;
+  return `<section class="project-detail"><div class="card project-head"><div class="row"><div><h2>${esc(p.title)}${p.archived ? "（已归档）" : ""}</h2>${p.description ? `<p>${esc(p.description)}</p>` : ""}</div><div class="actions">${button("排列：" + projectSortNames[projectSort], "project-sort")}${button("编辑", "project", p.id)}${button(p.archived ? "恢复项目" : "归档项目", "archive-project", p.id)}${button("删除", "delete", p.id, 'data-kind="projects"')}</div></div><div class="actions">${button("添加目标", "goal", "", 'class="primary"')}${button("添加任务", "task")}${button("调整任务", "task-adjust")}${button("新建文档", "note")}${button("添加日程", "event")}</div></div><h2 class="project-section-title">目标 · ${goals.length}</h2><div class="project-goals">${goals.map((goal) => goalCard(goal, true)).join("") || blank("暂无目标")}</div><section class="card project-section"><h2>未关联目标的任务 · ${tasks.length}</h2>${taskList(tasks)}</section><div class="grid project-support"><section class="card project-section"><h2>笔记 · ${notes.length}</h2>${notes.map((note) => `<div class="project-link-row">${button(esc(note.title), "open-note", note.id)}<small>${note.date}</small></div>`).join("") || blank("暂无笔记")}</section><section class="card project-section"><h2>日程 · ${events.length}</h2>${events.map((event) => `<div class="project-link-row"><span><strong>${esc(event.title)}</strong><small>${event.date}${event.endDate && event.endDate !== event.date ? " → " + event.endDate : ""} · ${event.start}–${event.end}</small></span>${button("编辑", "event", event.id)}</div>`).join("") || blank("暂无日程")}</section></div></section>`;
 }
-function goalColor(id) {
+function goalColor(goal) {
+  if (goal?.color && /^#[0-9a-f]{6}$/i.test(goal.color)) return goal.color;
+  const id = goal?.id || String(goal || "");
   const colors = ["#648bd6", "#4aa58c", "#c68d40", "#b074bd", "#c87878"];
   return colors[
     [...id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % colors.length
   ];
+}
+function calendarEventBand(event, day) {
+  const start = day === event.originDay,
+    end = day === event.occurrenceEndDate,
+    weekday = new Date(day + "T12:00:00").getDay(),
+    weekStart = weekday === 1,
+    weekEnd = weekday === 0,
+    spanning = event.originDay !== event.occurrenceEndDate,
+    showLabel = !spanning || start || weekStart,
+    classes = [
+      "calendar-event",
+      spanning ? "event-span" : "",
+      start ? "span-start" : "span-middle",
+      end ? "span-end" : "",
+      weekStart ? "week-start" : "",
+      weekEnd ? "week-end" : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+    label = showLabel
+      ? `${start ? event.start + " " : ""}${esc(event.title)}`
+      : "&nbsp;";
+  return `<small class="${classes}" style="--event-band:${esc(event.color || "#648bd6")}" title="${esc(event.title)} · ${event.originDay} → ${event.occurrenceEndDate} · ${event.start}–${event.end}" aria-label="${esc(event.title)}，${event.originDay}至${event.occurrenceEndDate}">${label}</small>`;
 }
 function renderCalendar(c) {
   const first = new Date(month + "-01T12:00:00"),
@@ -1148,7 +1410,7 @@ function renderCalendar(c) {
       .slice(0, 3)
       .map(
         (g) =>
-          `<i style="background:${goalColor(g.id)}" title="${esc(g.title)}" aria-label="${esc(g.title)}"></i>`,
+          `<i style="background:${goalColor(g)}" title="${esc(g.title)}" aria-label="${esc(g.title)}"></i>`,
       )
       .join(
         "",
@@ -1162,10 +1424,7 @@ function renderCalendar(c) {
         "",
       )}${starred.length > 2 ? `<small>另 ${starred.length - 2} 项星标</small>` : ""}${es
       .slice(0, 2)
-      .map(
-        (e) =>
-          `<small class="calendar-event" style="border-left-color:${esc(e.color || "#648bd6")}" title="${esc(e.title)} · ${e.start}–${e.end}">${e.continued ? "续" : e.start} ${esc(e.title)}</small>`,
-      )
+      .map((event) => calendarEventBand(event, d))
       .join(
         "",
       )}${es.length > 2 ? `<small>另 ${es.length - 2} 项日程</small>` : ""}${ts.length ? `<small class="calendar-count">任务 ${completed}/${ts.length} 已完成</small>` : ""}${live(state, "notes", true).some((n) => n.type === "diary" && n.date === d) ? "<small>有日记</small>" : ""}</button>`;
@@ -1182,7 +1441,7 @@ function renderCalendar(c) {
     )
     .map(
       (g) =>
-        `<span><i style="background:${goalColor(g.id)}"></i>${esc(g.title)}</span>`,
+        `<span><i style="background:${goalColor(g)}"></i>${esc(g.title)}</span>`,
     )
     .join(
       "",
@@ -1875,6 +2134,9 @@ async function route(action, id, b) {
       break;
     case "task":
       editTask(id);
+      break;
+    case "task-adjust":
+      adjustTasks(id);
       break;
     case "day-task":
       editTask("", { date: b.dataset.day });

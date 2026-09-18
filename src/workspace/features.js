@@ -1,4 +1,4 @@
-import { today, uid, validDay, live } from "./core.js";
+import { today, uid, validDay, live, addDays, dayString } from "./core.js";
 import {
   recordedHours,
   segmentDuration,
@@ -213,13 +213,111 @@ export function createFeatures(ctx) {
   const debtRemaining = (debt) => debt.principalCents - debtPaid(debt);
   const debtBaseRemaining = (debt) =>
     Math.round(debtRemaining(debt) * Number(debt.rate || 1));
+  function installmentDate(firstDate, index, interval, unit) {
+    if (unit === "days") return addDays(firstDate, index * interval);
+    if (unit === "weeks") return addDays(firstDate, index * interval * 7);
+    const source = new Date(firstDate + "T12:00:00"),
+      wantedDay = source.getDate(),
+      target = new Date(
+        source.getFullYear(),
+        source.getMonth() + index * interval,
+        1,
+        12,
+      ),
+      last = new Date(
+        target.getFullYear(),
+        target.getMonth() + 1,
+        0,
+        12,
+      ).getDate();
+    target.setDate(Math.min(wantedDay, last));
+    return dayString(target);
+  }
+  const planSignature = (plan) =>
+    plan
+      ? [plan.firstDate, plan.count, plan.interval, plan.unit].join("|")
+      : "";
+  function installmentAmount(debt, index) {
+    const base = Math.floor(debt.principalCents / debt.installment.count);
+    return index === debt.installment.count - 1
+      ? debt.principalCents - base * (debt.installment.count - 1)
+      : base;
+  }
+  function installmentTaskTitle(debt, index) {
+    const verb = debt.kind === "payable" ? "还款" : "收款";
+    return `${verb} · ${debt.title} · ${currencySymbols[debt.currency] || debt.currency} ${money(installmentAmount(debt, index))}`;
+  }
+  function syncDebtTasks(debt, previousPlan) {
+    const tasks = current().tasks,
+      existing = tasks.filter((task) => task.debt === debt.id),
+      changed = planSignature(previousPlan) !== planSignature(debt.installment);
+    if (changed)
+      for (const task of existing)
+        if (!task.done && !task.deletedAt)
+          task.deletedAt = new Date().toISOString();
+    if (!debt.installment) return;
+    if (changed) {
+      const completedDates = new Set(
+          existing
+            .filter((task) => task.done && task.date)
+            .map((task) => task.date),
+        ),
+        taskIds = existing.filter((task) => task.done).map((task) => task.id);
+      for (let index = 0; index < debt.installment.count; index++) {
+        const date = installmentDate(
+          debt.installment.firstDate,
+          index,
+          debt.installment.interval,
+          debt.installment.unit,
+        );
+        if (completedDates.has(date)) continue;
+        const task = {
+          id: uid(),
+          title: installmentTaskTitle(debt, index),
+          project: debt.project,
+          goal: "",
+          debt: debt.id,
+          scheduleType: "single",
+          date,
+          endDate: "",
+          repeat: "none",
+          repeatUnit: "days",
+          repeatInterval: 1,
+          until: "",
+          done: false,
+          shelved: false,
+          starred: false,
+          completedOn: "",
+          completedDates: [],
+          exceptions: [],
+          sourceNote: "",
+          createdAt: new Date().toISOString(),
+        };
+        tasks.push(task);
+        taskIds.push(task.id);
+      }
+      debt.installment.taskIds = taskIds;
+    } else {
+      existing
+        .filter((task) => !task.deletedAt)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .forEach((task, index) => {
+          task.title = installmentTaskTitle(
+            debt,
+            Math.min(index, debt.installment.count - 1),
+          );
+          task.project = debt.project;
+          task.updatedAt = new Date().toISOString();
+        });
+    }
+  }
   function debtCard(debt) {
     const paid = debtPaid(debt),
       remaining = debtRemaining(debt),
       settled = remaining === 0,
       overdue = !settled && debt.dueDate && debt.dueDate < today(),
       label = debt.kind === "payable" ? "应还" : "应收";
-    return `<article class="debt-card ${debt.kind} ${settled ? "settled" : ""}"><div class="row"><div><span class="debt-kind">${label}</span><h3>${esc(debt.title)}</h3><small>${esc(debt.party || "未填往来方")} · ${debt.date}${debt.dueDate ? " → " + debt.dueDate : ""}${overdue ? " · 已逾期" : settled ? " · 已结清" : ""}</small></div><div class="debt-balance"><small>剩余</small><strong>${currencySymbols[debt.currency] || debt.currency} ${money(remaining)}</strong>${debt.currency !== "CNY" ? `<small>≈ ¥ ${money(debtBaseRemaining(debt))}</small>` : ""}</div></div><progress max="${debt.principalCents}" value="${paid}" aria-label="${esc(debt.title)}结清进度"></progress><div class="row debt-actions"><small>本金 ${currencySymbols[debt.currency] || debt.currency} ${money(debt.principalCents)}${debt.account ? " · " + esc(accountName(debt.account)) : ""}</small><div class="actions">${!settled ? button(debt.kind === "payable" ? "记还款" : "记收款", "debt-payment", debt.id) : ""}${button("编辑", "debt-edit", debt.id)}${button("删除", "delete", debt.id, 'data-kind="debts"')}</div></div>${debt.memo ? `<p>${esc(debt.memo)}</p>` : ""}${
+    return `<article class="debt-card ${debt.kind} ${settled ? "settled" : ""}"><div class="row"><div><span class="debt-kind">${label}</span><h3>${esc(debt.title)}</h3><small>${esc(debt.party || "未填往来方")} · ${debt.date}${debt.dueDate ? " → " + debt.dueDate : ""}${debt.installment ? ` · ${debt.installment.count} 期` : ""}${overdue ? " · 已逾期" : settled ? " · 已结清" : ""}</small></div><div class="debt-balance"><small>剩余</small><strong>${currencySymbols[debt.currency] || debt.currency} ${money(remaining)}</strong>${debt.currency !== "CNY" ? `<small>≈ ¥ ${money(debtBaseRemaining(debt))}</small>` : ""}</div></div><progress max="${debt.principalCents}" value="${paid}" aria-label="${esc(debt.title)}结清进度"></progress><div class="row debt-actions"><small>本金 ${currencySymbols[debt.currency] || debt.currency} ${money(debt.principalCents)}${debt.account ? " · " + esc(accountName(debt.account)) : ""}</small><div class="actions">${!settled ? button(debt.kind === "payable" ? "记还款" : "记收款", "debt-payment", debt.id) : ""}${button("编辑", "debt-edit", debt.id)}${button("删除", "delete", debt.id, 'data-kind="debts"')}</div></div>${debt.memo ? `<p>${esc(debt.memo)}</p>` : ""}${
       debt.payments.length
         ? `<details><summary>${debt.kind === "payable" ? "还款" : "收款"}记录 · ${debt.payments.length}</summary>${debt.payments
             .slice()
@@ -299,7 +397,6 @@ export function createFeatures(ctx) {
       <form id="ledger-filter" class="filter-bar"><label>月份<input type="month" name="month" value="${ledgerMonth}" required></label><label>类型<select name="kind">${[["all", "全部"], ...ledgerKinds].map(([value, label]) => `<option value="${value}" ${ledgerKind === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label>分类<select name="category"><option value="">全部分类</option>${[...new Set([...categories, ...all.map((record) => record.category)])].map((category) => `<option ${ledgerCategory === category ? "selected" : ""}>${esc(category)}</option>`).join("")}</select></label><label>搜索<input name="query" value="${esc(ledgerQuery)}" placeholder="名称、账户或投资标的"></label><button>筛选</button></form>
       <div class="metrics ledger-metrics"><div><small>收入</small><strong>¥ ${money(income)}</strong></div><div><small>支出</small><strong>¥ ${money(expense)}</strong></div><div><small>净收支</small><strong>¥ ${money(income - expense)}</strong></div><div><small>账户资产</small><strong>¥ ${money(deposits)}</strong></div><div><small>投资净额</small><strong>¥ ${money(invested)}</strong></div><div><small>${budget ? (expense > budget.cents ? "超出预算" : "预算剩余") : "月预算"}</small><strong>${budget ? "¥ " + money(Math.abs(budget.cents - expense)) : "未设置"}</strong></div></div>
       ${budget ? `<div class="card budget-card"><div class="row"><span>预算 ¥ ${money(budget.cents)}</span><span>${Math.round((expense / budget.cents) * 100)}%</span></div><progress max="${budget.cents}" value="${Math.min(expense, budget.cents)}"></progress></div>` : ""}
-      ${debtSection()}
       <div class="grid ledger-grid"><section class="card"><h2>账户</h2>${
         activeAccounts()
           .map((account) => {
@@ -326,6 +423,7 @@ export function createFeatures(ctx) {
           )
           .join("") || '<div class="empty">本月暂无支出</div>'
       }</section><section class="card"><h2>本月记录</h2><div class="ledger-summary"><strong>${all.length}</strong><span>笔记录</span><strong>${new Set(all.map((record) => record.date)).size}</strong><span>个记账日</span></div></section></div>
+      ${debtSection()}
       <section class="card"><h2>明细 · ${rows.length} 笔</h2>${
         rows
           .map((record) => {
@@ -449,6 +547,9 @@ export function createFeatures(ctx) {
   }
   function editDebt(id = "") {
     const debt = current().debts.find((item) => item.id === id),
+      previousPlan = debt?.installment
+        ? structuredClone(debt.installment)
+        : null,
       accounts = activeAccounts(),
       accountOptions = [
         ["", "未关联账户"],
@@ -479,6 +580,43 @@ export function createFeatures(ctx) {
         `<div class="grid">${field("起始日", "date", debt?.date || today(), "date", true)}${field("到期日", "dueDate", debt?.dueDate || "", "date")}</div>` +
         select("关联账户", "account", accountOptions, debt?.account || "") +
         projectField(debt?.project || "") +
+        select(
+          "分期计划",
+          "installmentMode",
+          [
+            ["none", "不设置分期"],
+            ["installment", "周期还款"],
+          ],
+          debt?.installment ? "installment" : "none",
+        ) +
+        `<div id="debt-installment-fields" class="installment-fields"><div class="grid">${field(
+          "首期日期",
+          "firstDate",
+          debt?.installment?.firstDate || debt?.date || today(),
+          "date",
+          true,
+        )}${field(
+          "期数",
+          "installmentCount",
+          debt?.installment?.count || 12,
+          "number",
+          true,
+        )}</div><div class="grid">${field(
+          "每隔",
+          "installmentInterval",
+          debt?.installment?.interval || 1,
+          "number",
+          true,
+        )}${select(
+          "周期",
+          "installmentUnit",
+          [
+            ["months", "月"],
+            ["weeks", "周"],
+            ["days", "天"],
+          ],
+          debt?.installment?.unit || "months",
+        )}</div></div>` +
         area("备注", "memo", debt?.memo),
       async (values) => {
         if (!values.title.trim() || !validDay(values.date))
@@ -493,6 +631,29 @@ export function createFeatures(ctx) {
           rate = Number(values.rate);
         if (principalCents < paid) throw Error("本金不能小于已记录的还款");
         if (!Number.isFinite(rate) || rate <= 0) throw Error("请填写有效汇率");
+        let installment = null;
+        if (values.installmentMode === "installment") {
+          const count = Math.floor(Number(values.installmentCount)),
+            interval = Math.floor(Number(values.installmentInterval));
+          if (
+            !validDay(values.firstDate) ||
+            values.firstDate < values.date ||
+            !Number.isSafeInteger(count) ||
+            count < 1 ||
+            count > 120 ||
+            !Number.isSafeInteger(interval) ||
+            interval < 1 ||
+            interval > 365
+          )
+            throw Error("请填写有效的分期计划");
+          installment = {
+            firstDate: values.firstDate,
+            count,
+            interval,
+            unit: values.installmentUnit,
+            taskIds: debt?.installment?.taskIds || [],
+          };
+        }
         const next = {
           title: values.title.trim(),
           kind: values.kind,
@@ -505,21 +666,39 @@ export function createFeatures(ctx) {
           account: values.account,
           project: values.project,
           memo: values.memo,
+          installment,
           updatedAt: new Date().toISOString(),
         };
-        if (debt) Object.assign(debt, next);
-        else
-          current().debts.push({
+        let target = debt;
+        if (target) Object.assign(target, next);
+        else {
+          target = {
             id: uid(),
             createdAt: new Date().toISOString(),
             payments: [],
             ...next,
-          });
+          };
+          current().debts.push(target);
+        }
+        if (!target.dueDate && target.installment)
+          target.dueDate = installmentDate(
+            target.installment.firstDate,
+            target.installment.count - 1,
+            target.installment.interval,
+            target.installment.unit,
+          );
+        syncDebtTasks(target, previousPlan);
         await save();
       },
     );
     $("#f-amount").inputMode = "decimal";
     $("#f-rate").step = "any";
+    const toggleInstallments = () => {
+      $("#debt-installment-fields").hidden =
+        $("#f-installmentMode").value === "none";
+    };
+    $("#f-installmentMode").onchange = toggleInstallments;
+    toggleInstallments();
     $("#f-account").onchange = () => {
       const account = accounts.find(
         (item) => item.id === $("#f-account").value,

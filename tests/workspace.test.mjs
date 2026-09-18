@@ -16,6 +16,8 @@ import {
   taskProgress,
   goalPreview,
   applyGoal,
+  shiftTaskSchedule,
+  swapTaskSchedules,
   noteCheckpoint,
   importCopy,
 } from "../src/workspace/core.js";
@@ -110,6 +112,33 @@ test("shifting a goal keeps range task dates and per-day completion aligned", ()
   assert.equal(series.endDate, addDays(start, 4));
   assert.deepEqual(series.completedDates, [addDays(start, 3)]);
 });
+test("task schedules move and swap as complete date groups", () => {
+  const first = {
+      date: "2026-09-18",
+      endDate: "2026-09-20",
+      until: "",
+      completedDates: ["2026-09-19"],
+      exceptions: [],
+    },
+    second = {
+      date: "2026-10-02",
+      endDate: "",
+      until: "2026-10-30",
+      completedDates: [],
+      exceptions: ["2026-10-09"],
+    };
+  assert.equal(shiftTaskSchedule(first, 7), true);
+  assert.deepEqual(
+    [first.date, first.endDate, first.completedDates[0]],
+    ["2026-09-25", "2026-09-27", "2026-09-26"],
+  );
+  assert.equal(swapTaskSchedules(first, second), true);
+  assert.equal(first.date, "2026-10-02");
+  assert.equal(first.endDate, "2026-10-04");
+  assert.equal(second.date, "2026-09-25");
+  assert.equal(second.until, "2026-10-23");
+  assert.deepEqual(second.exceptions, ["2026-10-02"]);
+});
 const event = (extra = {}) => ({
   id: "e1",
   title: "课",
@@ -199,7 +228,7 @@ test("debts validate payments and survive copy import with remapped links", () =
     ],
   });
   const incoming = normalize(raw);
-  assert.equal(incoming.version, 4);
+  assert.equal(incoming.version, 5);
   assert.equal(incoming.debts[0].payments[0].cents, 25000);
   const destination = emptyState();
   importCopy(destination, incoming);
@@ -219,6 +248,53 @@ test("debts validate payments and survive copy import with remapped links", () =
   raw.debts[0].payments.pop();
   raw.debts[0].dueDate = "2026-08-31";
   assert.throws(() => normalize(raw), /到期日/);
+});
+test("goal colors and debt installment links survive normalization and copy", () => {
+  const raw = emptyState();
+  raw.projects.push({ id: "p", title: "计划" });
+  raw.goals.push({
+    id: "g",
+    title: "冲刺",
+    project: "p",
+    start: "2026-09-18",
+    end: "2026-10-18",
+    color: "#c87878",
+  });
+  raw.tasks.push({
+    id: "repay-1",
+    title: "还款",
+    project: "p",
+    debt: "d",
+    date: "2026-09-20",
+  });
+  raw.debts.push({
+    id: "d",
+    title: "设备分期",
+    project: "p",
+    kind: "payable",
+    principalCents: 30000,
+    currency: "CNY",
+    rate: 1,
+    date: "2026-09-18",
+    payments: [],
+    installment: {
+      firstDate: "2026-09-20",
+      count: 3,
+      interval: 1,
+      unit: "months",
+      taskIds: ["repay-1"],
+    },
+  });
+  const incoming = normalize(raw);
+  assert.equal(incoming.goals[0].color, "#c87878");
+  assert.equal(incoming.tasks[0].debt, "d");
+  assert.deepEqual(incoming.debts[0].installment.taskIds, ["repay-1"]);
+  const destination = emptyState();
+  importCopy(destination, incoming);
+  const copiedDebt = destination.debts[0],
+    copiedTask = destination.tasks[0];
+  assert.equal(copiedTask.debt, copiedDebt.id);
+  assert.deepEqual(copiedDebt.installment.taskIds, [copiedTask.id]);
 });
 test("history deduplicates and keeps at most thirty versions", () => {
   const n = { title: "A", body: "original", history: [] };

@@ -47,6 +47,28 @@ export function validDay(s) {
     dayString(new Date(s + "T12:00:00")) === s
   );
 }
+export function shiftTaskSchedule(task, delta) {
+  const amount = Math.trunc(Number(delta));
+  if (!Number.isFinite(amount) || !task?.date || !validDay(task.date))
+    return false;
+  for (const key of ["date", "endDate", "until"])
+    if (validDay(task[key])) task[key] = addDays(task[key], amount);
+  for (const key of ["completedDates", "exceptions"])
+    if (Array.isArray(task[key]))
+      task[key] = task[key].map((day) =>
+        validDay(day) ? addDays(day, amount) : day,
+      );
+  task.updatedAt = new Date().toISOString();
+  return true;
+}
+export function swapTaskSchedules(first, second) {
+  if (!validDay(first?.date) || !validDay(second?.date)) return false;
+  const delta = dayDiff(first.date, second.date);
+  if (!delta) return true;
+  shiftTaskSchedule(first, delta);
+  shiftTaskSchedule(second, -delta);
+  return true;
+}
 const str = (v, fallback = "") => (typeof v === "string" ? v : fallback);
 const allowed = (v, values, fallback) => (values.includes(v) ? v : fallback);
 const cleanDay = (v, fallback = "") => (validDay(v) ? v : fallback);
@@ -147,7 +169,7 @@ export function taskProgress(task, start, end) {
 }
 export function emptyState() {
   return {
-    version: 4,
+    version: 5,
     projects: [],
     goals: [],
     tasks: [],
@@ -166,7 +188,7 @@ export function normalize(raw) {
   if (
     !raw ||
     typeof raw !== "object" ||
-    (raw.version && ![1, 2, 3, 4].includes(raw.version))
+    (raw.version && ![1, 2, 3, 4, 5].includes(raw.version))
   )
     throw Error("不支持的备份版本");
   if (
@@ -211,6 +233,7 @@ export function normalize(raw) {
           start: x.start,
           end: x.end,
           description: str(x.description),
+          color: /^#[0-9a-f]{6}$/i.test(x.color) ? x.color : "",
           status: allowed(
             x.status,
             ["active", "paused", "completed", "cancelled"],
@@ -256,6 +279,7 @@ export function normalize(raw) {
           shelved: !!x.shelved,
           completedOn: cleanDay(x.completedOn, x.done ? cleanDay(x.date) : ""),
           sourceNote: str(x.sourceNote),
+          debt: str(x.debt),
           starred: !!x.starred,
         };
       }
@@ -417,6 +441,36 @@ export function normalize(raw) {
           x.principalCents
         )
           throw Error("还款总额不能超过债务金额");
+        let installment = null;
+        if (x.installment && typeof x.installment === "object") {
+          const count = Math.floor(Number(x.installment.count)),
+            interval = Math.floor(Number(x.installment.interval)),
+            unit = allowed(
+              x.installment.unit,
+              ["days", "weeks", "months"],
+              "months",
+            );
+          if (
+            !validDay(x.installment.firstDate) ||
+            !Number.isSafeInteger(count) ||
+            count < 1 ||
+            count > 120 ||
+            !Number.isSafeInteger(interval) ||
+            interval < 1 ||
+            interval > 365
+          )
+            throw Error("分期计划无效");
+          installment = {
+            firstDate: x.installment.firstDate,
+            count,
+            interval,
+            unit,
+            taskIds: (Array.isArray(x.installment.taskIds)
+              ? x.installment.taskIds
+              : []
+            ).filter((id) => typeof id === "string"),
+          };
+        }
         return {
           ...y,
           project,
@@ -434,6 +488,7 @@ export function normalize(raw) {
           account: str(x.account),
           memo: str(x.memo),
           payments,
+          installment,
         };
       }
       if (k === "focus")
@@ -518,6 +573,8 @@ export function normalize(raw) {
     if (!g) t.goal = "";
     else t.project = g.project;
   }
+  for (const t of s.tasks)
+    if (t.debt && !s.debts.some((debt) => debt.id === t.debt)) t.debt = "";
   for (const n of s.notes) {
     n.projects = n.projects.filter((id) => s.projects.some((p) => p.id === id));
     n.project = n.projects[0] || "";
@@ -657,7 +714,7 @@ export function importCopy(state, incoming) {
     for (const original of incoming[k]) {
       const x = structuredClone(original);
       x.id = map.get(x.id);
-      for (const f of ["project", "goal", "sourceNote", "task"])
+      for (const f of ["project", "goal", "sourceNote", "task", "debt"])
         if (f in x) x[f] = map.get(x[f]) || "";
       if (k === "notes") {
         const remap = (n) => {
@@ -682,7 +739,13 @@ export function importCopy(state, incoming) {
         if (map.has(x.account)) x.account = map.get(x.account);
         if (map.has(x.toAccount)) x.toAccount = map.get(x.toAccount);
       }
-      if (k === "debts" && map.has(x.account)) x.account = map.get(x.account);
+      if (k === "debts") {
+        if (map.has(x.account)) x.account = map.get(x.account);
+        if (x.installment)
+          x.installment.taskIds = x.installment.taskIds
+            .map((id) => map.get(id))
+            .filter(Boolean);
+      }
       if (
         k === "notes" &&
         x.type === "diary" &&
